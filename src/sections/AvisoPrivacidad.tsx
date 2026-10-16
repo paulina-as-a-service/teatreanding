@@ -150,6 +150,7 @@ export default function AvisoPrivacidad() {
                     <li>Clip (PayClip), para el procesamiento de pagos.</li>
                     <li>Zoom, para impartir las sesiones en línea.</li>
                     <li>Servicios de correo electrónico, para comunicarnos contigo.</li>
+                    <li>Google (Hojas de cálculo de Google), para administrar la lista de inscripciones y pagos.</li>
                   </UL>
                   <P>Algunos de estos proveedores pueden almacenar información en servidores ubicados fuera de México.</P>
 

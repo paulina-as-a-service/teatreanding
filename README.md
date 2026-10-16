@@ -49,3 +49,25 @@ La marca usa Akzidenz-Grotesk (licencia comercial) y Saira Condensed. Saira Cond
 vía `@fontsource`. Mientras no haya archivos web licenciados de Akzidenz-Grotesk, se usa Archivo como
 sustituto. Para usar la fuente original, agrega los `.woff2` en `public/fonts/` y declara el
 `@font-face` con el nombre `Akzidenz-Grotesk` en `src/index.css`.
+
+## Google Sheet de inscripciones
+
+Cada registro (y cada cambio de nombre, correo o estado de pago) se copia a una Google Sheet.
+La hoja recibe ID, fecha, nombre, apellidos, correo, estado de pago y fecha de pago. El campo
+"motivo" no se envía. Supabase es la fuente de verdad: los cambios hechos a mano en la hoja se
+sobrescriben con la siguiente actualización desde Supabase.
+
+Piezas:
+
+- `supabase/migrations/20261016210000_sync_inscripciones_google_sheets.sql`: columnas
+  `pago_estado` / `pagado_at`, política de inserción (solo registros pendientes) y trigger que
+  envía el registro con `pg_net`.
+- `integrations/google-sheets/Code.gs`: Apps Script que recibe el registro y lo agrega o actualiza.
+- La URL del web app (con su token) se guarda en Supabase Vault con el nombre `sheets_webhook_url`.
+  Nunca va en el repo.
+
+Para marcar un pago (por ahora, manual): en el Table Editor de Supabase cambia `pago_estado` a
+`pagado` y llena `pagado_at`. La hoja se actualiza sola.
+
+Diagnóstico: `select id, status_code, created from net._http_response order by created desc limit 10;`
+Un 302 o 200 indica que Google recibió el registro.

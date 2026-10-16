@@ -1,0 +1,153 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ---------- Theme tokens (RGB channels so Tailwind can apply alpha) ---------- */
+:root {
+  --bg: 245 243 251;
+  --surface: 255 255 255;
+  --ink: 46 37 162; /* #2e25a2 */
+  --text: 69 69 70; /* #454546 */
+  --muted: 96 96 116;
+  --accent: 92 75 216; /* #5c4bd8 */
+  --highlight: 140 47 165; /* #8c2fa5 */
+  --line: 46 37 162;
+  --grid: rgba(46, 37, 162, 0.06);
+  --hat-dark: #454546;
+  --hat-main: #aa3277;
+  color-scheme: light;
+}
+
+.dark {
+  --bg: 14 11 38;
+  --surface: 26 21 64;
+  --ink: 228 224 241; /* #e4e0f1 */
+  --text: 215 211 234;
+  --muted: 160 154 196;
+  --accent: 124 107 240;
+  --highlight: 191 119 210; /* #bf77d2 */
+  --line: 215 199 238;
+  --grid: rgba(215, 199, 238, 0.05);
+  --hat-dark: #e4e0f1;
+  --hat-main: #bf77d2;
+  color-scheme: dark;
+}
+
+/* ---------- Animated theme switch (View Transitions API) ---------- */
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation: none;
+  mix-blend-mode: normal;
+}
+::view-transition-new(root) {
+  z-index: 2;
+}
+::view-transition-old(root) {
+  z-index: 1;
+}
+
+@layer base {
+  html {
+    scroll-behavior: smooth;
+    scroll-padding-top: 5.5rem;
+    -webkit-text-size-adjust: 100%;
+  }
+  body {
+    @apply bg-bg font-sans text-text antialiased;
+    overflow-x: hidden;
+    font-size: 1rem;
+    line-height: 1.6;
+  }
+  ::selection {
+    background: rgb(var(--accent) / 0.25);
+  }
+  :focus-visible {
+    outline: 2px solid rgb(var(--accent));
+    outline-offset: 3px;
+    border-radius: 6px;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    html {
+      scroll-behavior: auto;
+    }
+  }
+}
+
+@layer components {
+  .page {
+    @apply mx-auto w-full max-w-page px-4 sm:px-6 lg:px-8;
+  }
+
+  /* Poster-like grid background */
+  .bg-stage-grid {
+    background-image: linear-gradient(var(--grid) 1px, transparent 1px),
+      linear-gradient(90deg, var(--grid) 1px, transparent 1px);
+    background-size: 56px 56px;
+  }
+
+  .eyebrow {
+    @apply font-display text-sm font-semibold uppercase tracking-[0.22em] text-accent;
+  }
+
+  .card {
+    @apply rounded-3xl border border-line/10 bg-surface/70 shadow-[0_1px_0_rgba(255,255,255,0.4)_inset,0_20px_60px_-30px_rgba(46,37,162,0.35)] backdrop-blur-xl;
+  }
+  .dark .card {
+    @apply shadow-[0_1px_0_rgba(255,255,255,0.06)_inset,0_20px_60px_-30px_rgba(0,0,0,0.8)];
+  }
+
+  .btn {
+    @apply relative inline-flex items-center justify-center gap-2 overflow-hidden rounded-full px-6 py-3 font-display text-base font-semibold uppercase tracking-[0.12em] transition-[transform,box-shadow,background-color] duration-300;
+  }
+  .btn-primary {
+    @apply btn bg-brand-indigo text-white shadow-[0_10px_30px_-10px_rgba(46,37,162,0.7)] hover:-translate-y-0.5 hover:shadow-[0_16px_40px_-12px_rgba(92,75,216,0.8)];
+  }
+  .dark .btn-primary {
+    @apply bg-brand-violet;
+  }
+  /* Sheen that sweeps across primary buttons on hover */
+  .btn-primary::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(110deg, transparent 30%, rgba(255, 255, 255, 0.35) 50%, transparent 70%);
+    transform: translateX(-120%);
+    transition: transform 0.7s ease;
+  }
+  .btn-primary:hover::after {
+    transform: translateX(120%);
+  }
+  .btn-ghost {
+    @apply btn border border-ink/20 text-ink hover:-translate-y-0.5 hover:border-ink/50 hover:bg-ink/5;
+  }
+
+  .gradient-text {
+    background: linear-gradient(100deg, rgb(var(--ink)) 10%, rgb(var(--accent)) 55%, rgb(var(--highlight)) 95%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+
+  .field {
+    @apply w-full rounded-2xl border border-line/15 bg-surface/80 px-4 pb-2.5 pt-6 text-base text-text outline-none transition-[border-color,box-shadow] duration-200 placeholder:text-transparent focus:border-accent focus:shadow-[0_0_0_4px_rgb(var(--accent)/0.15)];
+  }
+}
+
+@layer utilities {
+  .marquee-track {
+    animation: marquee 40s linear infinite;
+  }
+  @keyframes marquee {
+    from {
+      transform: translateX(0);
+    }
+    to {
+      transform: translateX(-50%);
+    }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .marquee-track {
+      animation: none;
+    }
+  }
+}

@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="es-MX">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Introducción a la Producción Creativa | Teatranding!</title>
+    <meta
+      name="description"
+      content="Curso en línea de Teatranding! con Mauricio Baylón: lleva una idea al escenario de principio a fin. 5 sábados, del 14 de noviembre al 12 de diciembre de 2026, de 10:00 a 14:00 h (hora de la Ciudad de México)."
+    />
+    <meta property="og:type" content="website" />
+    <meta property="og:locale" content="es_MX" />
+    <meta property="og:title" content="Curso: Introducción a la Producción Creativa para eventos y entretenimiento" />
+    <meta
+      property="og:description"
+      content="20 horas en línea con Mauricio Baylón. Sábados del 14 de noviembre al 12 de diciembre, de 10:00 a 14:00 h (CDMX)."
+    />
+    <meta property="og:image" content="/img/cartel.jpg" />
+    <meta name="theme-color" content="#f5f3fb" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#0e0b26" media="(prefers-color-scheme: dark)" />
+    <script>
+      // Apply the saved (or system) theme before first paint to avoid a flash of the wrong theme.
+      (function () {
+        try {
+          var saved = localStorage.getItem('teatranding-theme');
+          var dark = saved ? saved === 'dark' : window.matchMedia('(prefers-color-scheme: dark)').matches;
+          document.documentElement.classList.toggle('dark', dark);
+          document.documentElement.style.colorScheme = dark ? 'dark' : 'light';
+        } catch (e) {}
+      })();
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

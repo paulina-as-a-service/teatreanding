@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
-import { ArrowRight, Award, CreditCard, Globe2, MonitorPlay, Timer } from 'lucide-react';
+import { ArrowRight, Award, Check, CreditCard, Globe2, MonitorPlay, Timer } from 'lucide-react';
 import { CURSO, HORARIO_CDMX, SESIONES, ZONA_CURSO } from '../content/curso';
 import { SectionHeading } from '../components/ui';
 import { fadeUp, stagger } from '../components/motion';
@@ -90,8 +90,8 @@ export default function Fechas() {
             </p>
             <p className="mt-2 text-white/85">{CURSO.precio.nota}</p>
             <ul className="mt-6 space-y-2 text-sm text-white/85">
-              <li className="flex items-center gap-2">
-                <Award size={16} aria-hidden /> Incluye reconocimiento por {CURSO.duracionHoras} horas
+              <li className="flex items-start gap-2">
+                <Award size={16} className="mt-0.5 shrink-0" aria-hidden /> Reconocimiento por {CURSO.duracionHoras} horas (con 100% de asistencia)
               </li>
               <li className="flex items-center gap-2">
                 <CreditCard size={16} aria-hidden /> Tarjeta de crédito o débito, a través de Clip
@@ -197,6 +197,9 @@ export default function Fechas() {
                 <p className="mt-5 font-display text-sm font-semibold uppercase tracking-[0.2em] text-accent">Al terminar</p>
                 <p className="mt-1 text-2xl font-bold leading-tight text-ink sm:text-3xl">{CURSO.reconocimiento.titulo}</p>
                 <p className="mt-3 text-text/85">{CURSO.reconocimiento.texto}</p>
+                <p className="mt-4 inline-flex items-center gap-2 rounded-full bg-accent/10 px-3 py-1.5 text-sm font-medium text-ink">
+                  <Check size={15} className="text-accent" aria-hidden /> {CURSO.reconocimiento.condicion}
+                </p>
               </div>
               <motion.div
                 className="relative mx-auto w-full max-w-md [perspective:1200px]"

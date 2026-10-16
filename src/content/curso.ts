@@ -29,6 +29,12 @@ export const CURSO = {
     moneda: 'MXN',
     nota: 'Pago único',
   },
+  // Confirmado por la usuaria (16 oct 2026): se entrega reconocimiento de participación por 20 horas.
+  reconocimiento: {
+    titulo: 'Reconocimiento de participación',
+    texto: 'Al concluir el curso recibes un reconocimiento de participación de Teatranding! por 20 horas de formación.',
+    imagen: '/img/reconocimiento.webp',
+  },
   pagoUrl: 'https://pago.clip.mx/v3/c4389f5d-9b11-4e61-9f30-7360aa4ea8af',
   contacto: {
     email: 'teatranding@gmail.com',

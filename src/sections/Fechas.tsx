@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
-import { ArrowRight, CreditCard, Globe2, MonitorPlay, Timer } from 'lucide-react';
+import { ArrowRight, Award, CreditCard, Globe2, MonitorPlay, Timer } from 'lucide-react';
 import { CURSO, HORARIO_CDMX, SESIONES, ZONA_CURSO } from '../content/curso';
 import { SectionHeading } from '../components/ui';
 import { fadeUp, stagger } from '../components/motion';
@@ -89,9 +89,14 @@ export default function Fechas() {
               <span className="font-display text-xl font-semibold">{CURSO.precio.moneda}</span>
             </p>
             <p className="mt-2 text-white/85">{CURSO.precio.nota}</p>
-            <p className="mt-6 flex items-center gap-2 text-sm text-white/85">
-              <CreditCard size={16} aria-hidden /> Tarjeta de crédito o débito, a través de Clip
-            </p>
+            <ul className="mt-6 space-y-2 text-sm text-white/85">
+              <li className="flex items-center gap-2">
+                <Award size={16} aria-hidden /> Incluye reconocimiento por {CURSO.duracionHoras} horas
+              </li>
+              <li className="flex items-center gap-2">
+                <CreditCard size={16} aria-hidden /> Tarjeta de crédito o débito, a través de Clip
+              </li>
+            </ul>
             <a href="#inscripcion" className="btn relative mt-8 bg-white text-brand-indigo hover:-translate-y-0.5">
               Inscribirme <ArrowRight size={18} aria-hidden />
             </a>
@@ -179,6 +184,35 @@ export default function Fechas() {
                 {c.status === 'en-curso' ? 'El curso está en marcha' : 'Esta edición ya terminó'}
               </p>
             )}
+          </motion.div>
+
+          {/* Certificate */}
+          <motion.div variants={fadeUp} className="card group relative overflow-hidden p-7 sm:p-8 lg:col-span-6">
+            <div className="absolute -right-24 -top-24 h-72 w-72 rounded-full bg-brand-orchid/20 blur-3xl" aria-hidden />
+            <div className="relative grid items-center gap-8 md:grid-cols-[1fr_1.1fr]">
+              <div>
+                <span className="grid h-14 w-14 place-items-center rounded-2xl bg-gradient-to-br from-brand-violet to-brand-plum text-white">
+                  <Award size={24} aria-hidden />
+                </span>
+                <p className="mt-5 font-display text-sm font-semibold uppercase tracking-[0.2em] text-accent">Al terminar</p>
+                <p className="mt-1 text-2xl font-bold leading-tight text-ink sm:text-3xl">{CURSO.reconocimiento.titulo}</p>
+                <p className="mt-3 text-text/85">{CURSO.reconocimiento.texto}</p>
+              </div>
+              <motion.div
+                className="relative mx-auto w-full max-w-md [perspective:1200px]"
+                initial={{ opacity: 0, rotateX: 25, rotateZ: -6, y: 30 }}
+                whileInView={{ opacity: 1, rotateX: 0, rotateZ: -3, y: 0 }}
+                viewport={{ once: true, margin: '0px 0px -10% 0px' }}
+                transition={{ duration: 0.9, delay: 0.2, ease: [0.22, 1, 0.36, 1] }}
+              >
+                <img
+                  src={CURSO.reconocimiento.imagen}
+                  alt="Diseño del reconocimiento de participación del curso"
+                  loading="lazy"
+                  className="w-full rounded-xl border border-white/40 shadow-[0_30px_60px_-20px_rgba(46,37,162,0.55)] transition-transform duration-700 group-hover:rotate-3 group-hover:scale-[1.03]"
+                />
+              </motion.div>
+            </div>
           </motion.div>
         </motion.div>
       </div>

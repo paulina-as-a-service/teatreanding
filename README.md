@@ -24,7 +24,7 @@ se muestra en la página con una etiqueta visible para que no se publique por ac
 - Testimonios (usar solo testimonios reales, con permiso)
 - Público objetivo (pendiente de validar)
 
-El Aviso de privacidad está en `src/sections/AvisoPrivacidad.tsx`. Falta el domicilio del responsable.
+El Aviso de privacidad está en `src/sections/AvisoPrivacidad.tsx`.
 
 ## Formulario de inscripción (Supabase)
 

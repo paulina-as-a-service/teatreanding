@@ -5,12 +5,13 @@ import { CURSO } from '../content/curso';
 
 /**
  * Aviso de privacidad integral (borrador genérico).
- * PENDIENTE: completar el domicilio del responsable y validar con asesoría legal antes de publicar.
+ * Validar con asesoría legal antes de publicar.
  */
 const RESPONSABLE = {
   nombre: 'Mauricio Baylón',
   marca: 'Teatranding!',
-  domicilio: '[Domicilio para oír y recibir notificaciones, PENDIENTE]',
+  domicilio:
+    'Calle Tochtli, Manzana 9, Interior Lote 6, Colonia Pedregal de Santo Domingo, Alcaldía Coyoacán, Ciudad de México',
   email: CURSO.contacto.email,
 };
 const ULTIMA_ACTUALIZACION = '16 de octubre de 2026';
@@ -121,6 +122,7 @@ export default function AvisoPrivacidad() {
                   <UL>
                     <li>Registrar tu solicitud de inscripción al curso.</li>
                     <li>Identificar y confirmar tu pago.</li>
+                    <li>Emitir tu reconocimiento de participación al concluir el curso.</li>
                     <li>Contactarte sobre tu inscripción, el pago y la logística del curso, incluido el acceso a las sesiones en línea.</li>
                     <li>Conocer tus intereses para adaptar los contenidos del curso.</li>
                     <li>Atender tus dudas, comentarios o aclaraciones.</li>

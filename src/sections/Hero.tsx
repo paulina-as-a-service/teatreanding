@@ -9,6 +9,7 @@ import {
 } from 'framer-motion';
 import { ArrowDown, ArrowRight, CalendarDays, Clock, MonitorPlay, Timer } from 'lucide-react';
 import { CURSO } from '../content/curso';
+import { useIsDesktop } from '../hooks/useMediaQuery';
 import { fadeUp, stagger } from '../components/motion';
 
 type Obj = {
@@ -37,21 +38,25 @@ function FloatingObject({
   mx,
   my,
   scroll,
+  parallax,
 }: {
   obj: Obj;
   mx: MotionValue<number>;
   my: MotionValue<number>;
   scroll: MotionValue<number>;
+  parallax: boolean;
 }) {
   const x = useTransform(mx, (v) => v * obj.depth * 36);
   const yMouse = useTransform(my, (v) => v * obj.depth * 28);
   const yScroll = useTransform(scroll, [0, 1], [0, -160 * obj.depth]);
   const y = useTransform([yMouse, yScroll], ([a, b]) => (a as number) + (b as number));
+  // On phones and tablets the objects stay inside their own box: no scroll or pointer
+  // parallax, so they never drift over the hero text.
 
   return (
     <motion.div
       className={`absolute ${obj.className} ${obj.mobileHidden ? 'hidden sm:block' : ''}`}
-      style={{ x, y }}
+      style={parallax ? { x, y } : undefined}
       initial={{ opacity: 0, scale: 0.6, rotate: obj.spin * 3 }}
       animate={{ opacity: 1, scale: 1, rotate: 0 }}
       transition={{ duration: 1.1, delay: 0.3 + obj.delay, ease: [0.22, 1, 0.36, 1] }}
@@ -61,7 +66,7 @@ function FloatingObject({
         alt=""
         draggable={false}
         className="w-full select-none drop-shadow-[0_30px_40px_rgba(46,37,162,0.35)]"
-        animate={{ y: [0, -14, 0], rotate: [0, obj.spin, 0] }}
+        animate={{ y: [0, parallax ? -14 : -8, 0], rotate: [0, obj.spin, 0] }}
         transition={{ duration: obj.float, repeat: Infinity, ease: 'easeInOut' }}
       />
     </motion.div>
@@ -89,6 +94,7 @@ export default function Hero() {
   const { scrollYProgress } = useScroll({ target: ref, offset: ['start start', 'end start'] });
   const contentY = useTransform(scrollYProgress, [0, 1], [0, 80]);
   const contentOpacity = useTransform(scrollYProgress, [0, 0.8], [1, 0]);
+  const isDesktop = useIsDesktop();
 
   // Pointer-driven spotlight + parallax (no React re-render per move)
   useEffect(() => {
@@ -125,7 +131,7 @@ export default function Hero() {
       />
 
       <div className="page grid items-center gap-10 lg:grid-cols-[1.1fr_1fr] lg:gap-6">
-        <motion.div style={{ y: contentY, opacity: contentOpacity }}>
+        <motion.div style={isDesktop ? { y: contentY, opacity: contentOpacity } : undefined}>
           <motion.div initial="hidden" animate="show" variants={stagger(0.09, 0.1)}>
             <motion.p
               variants={fadeUp}
@@ -175,7 +181,7 @@ export default function Hero() {
               Imparte: <span className="underline decoration-brand-orchid decoration-2 underline-offset-4">{CURSO.docente}</span>
             </motion.p>
 
-            <motion.div variants={fadeUp} className="mt-8 flex flex-wrap items-center gap-3">
+            <motion.div variants={fadeUp} className="mt-8 grid gap-3 sm:flex sm:flex-wrap sm:items-center">
               <a href="#inscripcion" className="btn-primary">
                 Aparta tu lugar <ArrowRight size={18} aria-hidden />
               </a>
@@ -197,9 +203,12 @@ export default function Hero() {
           </motion.div>
         </motion.div>
 
-        <div className="relative mx-auto aspect-square w-full max-w-[22rem] sm:max-w-md lg:max-w-none" aria-hidden>
+        <div
+          className="relative mx-auto mt-2 aspect-square w-full max-w-[17rem] sm:max-w-sm lg:mt-0 lg:max-w-none"
+          aria-hidden
+        >
           {OBJECTS.map((o) => (
-            <FloatingObject key={o.src} obj={o} mx={mx} my={my} scroll={scrollYProgress} />
+            <FloatingObject key={o.src} obj={o} mx={mx} my={my} scroll={scrollYProgress} parallax={isDesktop} />
           ))}
         </div>
       </div>

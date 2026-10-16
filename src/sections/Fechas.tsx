@@ -82,7 +82,7 @@ export default function Fechas() {
             variants={fadeUp}
             className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-brand-indigo via-brand-violet to-brand-plum p-7 text-white shadow-[0_30px_80px_-30px_rgba(46,37,162,0.8)] sm:p-8 lg:col-span-2"
           >
-            <img src="/img/cube.webp" alt="" aria-hidden className="pointer-events-none absolute -bottom-10 -right-10 w-44 opacity-60 mix-blend-screen" />
+            <img src="/img/cube.webp" alt="" aria-hidden className="pointer-events-none absolute -bottom-12 -right-12 w-32 opacity-30 mix-blend-screen sm:-bottom-10 sm:-right-10 sm:w-44 sm:opacity-60" />
             <p className="font-display text-sm font-semibold uppercase tracking-[0.2em] text-white/75">Inversión</p>
             <p className="mt-3 flex items-baseline gap-2">
               <span className="font-display text-6xl font-bold leading-none sm:text-7xl">{precio}</span>

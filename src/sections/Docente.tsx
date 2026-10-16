@@ -1,6 +1,7 @@
 import { useRef } from 'react';
 import { motion, useScroll, useTransform } from 'framer-motion';
 import { DOCENTE } from '../content/curso';
+import { useIsDesktop } from '../hooks/useMediaQuery';
 import { Copy, SectionHeading } from '../components/ui';
 import { fadeUp, stagger } from '../components/motion';
 
@@ -10,6 +11,7 @@ export default function Docente() {
   const photoY = useTransform(scrollYProgress, [0, 1], [40, -40]);
   const objY = useTransform(scrollYProgress, [0, 1], [120, -120]);
   const objRotate = useTransform(scrollYProgress, [0, 1], [-30, 30]);
+  const isDesktop = useIsDesktop();
 
   return (
     <section id="docente" ref={ref} className="relative overflow-hidden py-24 sm:py-32">
@@ -24,7 +26,7 @@ export default function Docente() {
           transition={{ duration: 0.9, ease: [0.22, 1, 0.36, 1] }}
         >
           <div className="absolute -inset-3 rounded-[2.5rem] bg-gradient-to-br from-brand-violet via-brand-orchid to-brand-magenta opacity-70 blur-xl" />
-          <motion.div style={{ y: photoY }} className="relative overflow-hidden rounded-[2rem] border border-white/20 bg-brand-charcoal">
+          <motion.div style={isDesktop ? { y: photoY } : undefined} className="relative overflow-hidden rounded-[2rem] border border-white/20 bg-brand-charcoal">
             <motion.img
               src={DOCENTE.foto}
               alt={`Retrato de ${DOCENTE.nombre}`}
@@ -48,15 +50,15 @@ export default function Docente() {
             src="/img/spiral.webp"
             alt=""
             aria-hidden
-            style={{ y: objY, rotate: objRotate }}
-            className="absolute -right-10 -top-10 w-28 drop-shadow-[0_20px_30px_rgba(46,37,162,0.4)] sm:-right-16 sm:w-36"
+            style={isDesktop ? { y: objY, rotate: objRotate } : undefined}
+            className="absolute -right-3 -top-8 w-20 drop-shadow-[0_20px_30px_rgba(46,37,162,0.4)] sm:-right-16 sm:-top-10 sm:w-36"
           />
           <motion.img
             src="/img/icosphere.webp"
             alt=""
             aria-hidden
-            style={{ y: photoY }}
-            className="absolute -bottom-8 -left-8 w-24 drop-shadow-[0_20px_30px_rgba(46,37,162,0.4)] sm:-left-14 sm:w-32"
+            style={isDesktop ? { y: photoY } : undefined}
+            className="absolute -bottom-6 -left-3 w-16 drop-shadow-[0_20px_30px_rgba(46,37,162,0.4)] sm:-bottom-8 sm:-left-14 sm:w-32"
           />
         </motion.div>
 

@@ -157,9 +157,7 @@ function claveServicio(): string {
   throw new Error('No Supabase service/secret key available to this function');
 }
 
-if (!Deno.env.get('TEATRANDING_TEST')) {
-  const db = createClient(Deno.env.get('SUPABASE_URL')!, claveServicio(), {
-    auth: { persistSession: false },
-  });
-  Deno.serve(crearHandler({ db, env: Deno.env, fetch, now: () => new Date() }));
-}
+const db = createClient(Deno.env.get('SUPABASE_URL')!, claveServicio(), {
+  auth: { persistSession: false },
+});
+Deno.serve(crearHandler({ db, env: Deno.env, fetch, now: () => new Date() }));

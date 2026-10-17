@@ -147,7 +147,7 @@ export default function AvisoPrivacidad() {
                   </P>
                   <UL>
                     <li>Servicios de alojamiento web y base de datos, donde se guarda el registro del formulario.</li>
-                    <li>Clip (PayClip), para el procesamiento de pagos.</li>
+                    <li>Clip (PayClip), para generar tu link de pago y procesar el pago (le compartimos tu nombre y correo electrónico).</li>
                     <li>Zoom, para impartir las sesiones en línea.</li>
                     <li>Servicios de correo electrónico, para comunicarnos contigo.</li>
                     <li>Google (Hojas de cálculo de Google), para administrar la lista de inscripciones y pagos.</li>

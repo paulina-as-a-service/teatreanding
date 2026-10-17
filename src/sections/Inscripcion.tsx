@@ -1,9 +1,10 @@
 import { useState, type FormEvent, type ReactNode } from 'react';
 import { AnimatePresence, motion, useAnimationControls } from 'framer-motion';
-import { AlertCircle, ArrowRight, Check, CreditCard, Loader2, Mail } from 'lucide-react';
+import { AlertCircle, ArrowRight, Check, CreditCard, Loader2, Mail, RefreshCw } from 'lucide-react';
 import { AVISO_VERSION, CURSO } from '../content/curso';
 import { SectionHeading } from '../components/ui';
 import { supabase } from '../lib/supabase';
+import { obtenerLinkPago, registrarInscripcion } from '../lib/inscripcion';
 
 type Fields = {
   nombre: string;
@@ -98,6 +99,10 @@ export default function Inscripcion() {
   const [errors, setErrors] = useState<Errors>({});
   const [status, setStatus] = useState<'idle' | 'sending' | 'done' | 'error'>('idle');
   const [serverError, setServerError] = useState('');
+  const [registroId, setRegistroId] = useState<string | null>(null);
+  const [pagoUrl, setPagoUrl] = useState<string | null>(null);
+  const [yaPagado, setYaPagado] = useState(false);
+  const [reintentando, setReintentando] = useState(false);
   const shake = useAnimationControls();
 
   const set = <K extends keyof Fields>(k: K, v: Fields[K]) => {
@@ -127,21 +132,39 @@ export default function Inscripcion() {
     }
     setStatus('sending');
     setServerError('');
-    const { error } = await supabase.from('inscripciones').insert({
-      nombre: f.nombre.trim(),
-      apellidos: f.apellidos.trim(),
-      email: f.email.trim().toLowerCase(),
-      motivo: f.motivo.trim(),
-      acepta_privacidad: f.aceptaPrivacidad,
-      acepta_comunicaciones: f.aceptaComunicaciones,
-      aviso_version: AVISO_VERSION,
-    });
-    if (error) {
+    try {
+      const r = await registrarInscripcion({
+        nombre: f.nombre.trim(),
+        apellidos: f.apellidos.trim(),
+        email: f.email.trim().toLowerCase(),
+        motivo: f.motivo.trim(),
+        aceptaPrivacidad: f.aceptaPrivacidad,
+        aceptaComunicaciones: f.aceptaComunicaciones,
+        avisoVersion: AVISO_VERSION,
+      });
+      if (!r.ok || !r.id) throw new Error(r.error ?? 'sin-id');
+      setRegistroId(r.id);
+      setPagoUrl(r.payment_url ?? null);
+      setYaPagado(!!r.ya_pagado);
+      setStatus('done');
+    } catch {
       setStatus('error');
       setServerError('No pudimos guardar tu registro.');
-      return;
     }
-    setStatus('done');
+  };
+
+  const reintentarLink = async () => {
+    if (!registroId) return;
+    setReintentando(true);
+    try {
+      const r = await obtenerLinkPago(registroId);
+      setPagoUrl(r.payment_url ?? null);
+      setYaPagado(!!r.ya_pagado);
+    } catch {
+      setPagoUrl(null);
+    } finally {
+      setReintentando(false);
+    }
   };
 
   const done = status === 'done';
@@ -356,21 +379,44 @@ export default function Inscripcion() {
                   <Check size={30} aria-hidden />
                 </motion.span>
                 <h3 className="mt-6 text-2xl font-bold text-ink">¡Gracias, {f.nombre.trim().split(' ')[0] || 'ya casi'}!</h3>
-                <p className="mx-auto mt-2 max-w-md text-text/85">
-                  Recibimos tus datos. Para completar tu inscripción, realiza el pago de{' '}
-                  <strong className="text-ink">
-                    ${CURSO.precio.monto.toLocaleString('es-MX')} {CURSO.precio.moneda}
-                  </strong>{' '}
-                  en la página segura de Clip.
-                </p>
-                <a
-                  href={CURSO.pagoUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="btn-primary mt-8 !px-8 !py-4 !text-lg"
-                >
-                  <CreditCard size={20} aria-hidden /> Ir al pago
-                </a>
+                {yaPagado ? (
+                  <p className="mx-auto mt-2 max-w-md text-text/85">
+                    Ya tenemos registrado un pago con este correo, así que no necesitas pagar de nuevo. Si quieres
+                    inscribir a otra persona, usa su propio correo.
+                  </p>
+                ) : pagoUrl ? (
+                  <>
+                    <p className="mx-auto mt-2 max-w-md text-text/85">
+                      Recibimos tus datos. Para completar tu inscripción, realiza el pago de{' '}
+                      <strong className="text-ink">
+                        ${CURSO.precio.monto.toLocaleString('es-MX')} {CURSO.precio.moneda}
+                      </strong>{' '}
+                      en la página segura de Clip. Al terminar volverás a esta página.
+                    </p>
+                    <a href={pagoUrl} className="btn-primary mt-8 !px-8 !py-4 !text-lg">
+                      <CreditCard size={20} aria-hidden /> Ir al pago
+                    </a>
+                  </>
+                ) : (
+                  <>
+                    <p className="mx-auto mt-2 max-w-md text-text/85">
+                      Guardamos tus datos, pero no pudimos generar tu link de pago en este momento.
+                    </p>
+                    <button
+                      type="button"
+                      onClick={reintentarLink}
+                      disabled={reintentando}
+                      className="btn-primary mt-8 !px-8 !py-4 !text-lg"
+                    >
+                      {reintentando ? (
+                        <Loader2 size={20} className="animate-spin" aria-hidden />
+                      ) : (
+                        <RefreshCw size={20} aria-hidden />
+                      )}{' '}
+                      Intentar de nuevo
+                    </button>
+                  </>
+                )}
                 <p className="mt-6 flex items-center justify-center gap-2 text-sm text-text/70">
                   <Mail size={15} aria-hidden /> ¿Dudas? Escríbenos a{' '}
                   <a className="font-semibold text-accent underline" href={`mailto:${CURSO.contacto.email}`}>

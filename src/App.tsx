@@ -10,6 +10,7 @@ import Testimonios from './sections/Testimonios';
 import Inscripcion from './sections/Inscripcion';
 import AvisoPrivacidad from './sections/AvisoPrivacidad';
 import Footer from './sections/Footer';
+import PagoRetorno from './components/PagoRetorno';
 
 export default function App() {
   const { theme, setTheme } = useTheme();
@@ -36,6 +37,7 @@ export default function App() {
         <AvisoPrivacidad />
       </main>
       <Footer />
+      <PagoRetorno />
     </MotionConfig>
   );
 }

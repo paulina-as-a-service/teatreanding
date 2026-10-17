@@ -24,7 +24,7 @@ export const CURSO = {
   modalidad: 'En línea por Zoom',
   duracionHoras: 20,
   precio: {
-    // Coincide con el monto actual del link de Clip.
+    // Debe coincidir con el secreto CLIP_MONTO de la Edge Function (el monto que Clip cobra).
     monto: 1999,
     moneda: 'MXN',
     nota: 'Pago único',
@@ -36,7 +36,6 @@ export const CURSO = {
     condicion: 'Se entrega a quienes asistan al 100% de las sesiones.',
     imagen: '/img/reconocimiento.webp',
   },
-  pagoUrl: 'https://pago.clip.mx/v3/c4389f5d-9b11-4e61-9f30-7360aa4ea8af',
   contacto: {
     email: 'teatranding@gmail.com',
     instagram: 'teatranding.mx',

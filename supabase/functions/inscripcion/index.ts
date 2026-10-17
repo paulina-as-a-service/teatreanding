@@ -219,7 +219,18 @@ export function crearHandler(deps: Deps) {
         if (!res.ok) continue;
         const clip = (await res.json()) as Record<string, unknown>;
         const st = estadoDe(clip);
-        if (!COMPLETADO.has(st)) continue;
+        if (!COMPLETADO.has(st)) {
+          // Leave a visible trace of what Clip answered (or which fields it sent, if no status).
+          const traza = (st || `SIN_ESTADO(${Object.keys(clip).join(',')})`).slice(0, 200);
+          if (prid === actual) {
+            await db
+              .from('inscripciones')
+              .update({ clip_ultimo_estado: traza, clip_actualizado_at: deps.now().toISOString() })
+              .eq('id', id)
+              .eq('pago_estado', 'pendiente');
+          }
+          continue;
+        }
         const ahora = deps.now().toISOString();
         const { error } = await db
           .from('inscripciones')

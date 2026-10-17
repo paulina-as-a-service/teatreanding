@@ -1,0 +1,10 @@
+# Used by the Supabase CLI (and tools that read it) when deploying Edge Functions.
+project_id = "teatranding"
+
+# Both functions are public: the form calls `inscripcion` without a user session,
+# and Clip cannot send a Supabase token to `clip-webhook` (it uses ?token= instead).
+[functions.inscripcion]
+verify_jwt = false
+
+[functions.clip-webhook]
+verify_jwt = false

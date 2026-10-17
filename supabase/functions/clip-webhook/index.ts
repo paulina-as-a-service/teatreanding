@@ -10,7 +10,7 @@
  * Marking it paid updates the Google Sheet automatically (database trigger).
  *
  * Secrets: CLIP_API_KEY, CLIP_SECRET_KEY, CLIP_WEBHOOK_TOKEN.
- * Provided automatically: SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY.
+ * Provided automatically: SUPABASE_URL and the service key (legacy or new format).
  *
  * Deploy with JWT verification OFF (Clip cannot send a Supabase token).
  */
@@ -143,8 +143,22 @@ export function crearHandler(deps: Deps) {
   };
 }
 
+/** Service key: legacy SUPABASE_SERVICE_ROLE_KEY, or the new secret key (SUPABASE_SECRET_KEYS is a JSON object of named keys). */
+function claveServicio(): string {
+  const legacy = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? Deno.env.get('SUPABASE_SECRET_KEY');
+  if (legacy) return legacy;
+  try {
+    const keys = JSON.parse(Deno.env.get('SUPABASE_SECRET_KEYS') ?? '{}') as Record<string, string>;
+    const k = keys.default ?? Object.values(keys)[0];
+    if (k) return k;
+  } catch {
+    /* fall through */
+  }
+  throw new Error('No Supabase service/secret key available to this function');
+}
+
 if (!Deno.env.get('TEATRANDING_TEST')) {
-  const db = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!, {
+  const db = createClient(Deno.env.get('SUPABASE_URL')!, claveServicio(), {
     auth: { persistSession: false },
   });
   Deno.serve(crearHandler({ db, env: Deno.env, fetch, now: () => new Date() }));

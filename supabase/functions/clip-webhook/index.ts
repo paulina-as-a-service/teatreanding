@@ -2,6 +2,8 @@
  * Edge Function: clip-webhook
  *
  * Receives Clip Checkout notifications (the `webhook_url` set on each payment link).
+ * Observed format (Oct 2026): { "id": <payment_request_id>, "origin": "checkout-api", "event_type": "INSERT" | "UPDATE" }.
+ * The documented format ({ payment_request_id, resource_status, ... }) is also accepted.
  * Clip does not document a signature for these notifications, so this function:
  *   1. checks the secret ?token= in the URL,
  *   2. logs the raw notification in `clip_eventos`,
@@ -33,6 +35,12 @@ const iguales = (a: string, b: string) => {
   return d === 0;
 };
 
+const texto = (v: unknown) => (typeof v === 'string' && v ? v : typeof v === 'number' ? String(v) : null);
+
+/** Status from Clip's GET /v2/checkout/{id} response (field name not fully documented). */
+const estadoDe = (clip: Record<string, unknown>) =>
+  String(clip.status ?? clip.resource_status ?? clip.payment_status ?? '').toUpperCase();
+
 const fechaValida = (...vals: unknown[]) => {
   for (const v of vals) {
     if (typeof v === 'string' && Number.isFinite(Date.parse(v))) return new Date(v).toISOString();
@@ -55,14 +63,18 @@ export function crearHandler(deps: Deps) {
       return json({ ok: false, error: 'json' }, 400);
     }
 
-    const prid = typeof n.payment_request_id === 'string' ? n.payment_request_id : null;
+    // Documented format carries payment_request_id; the observed format sends the link ID as `id`.
+    const prid =
+      typeof n.payment_request_id === 'string'
+        ? n.payment_request_id
+        : typeof n.id === 'string' && (n.origin === 'checkout-api' || !('resource' in n))
+          ? n.id
+          : null;
+    const notificado =
+      typeof n.resource_status === 'string' ? n.resource_status : typeof n.event_type === 'string' ? n.event_type : null;
     const { data: evento } = await db
       .from('clip_eventos')
-      .insert({
-        payment_request_id: prid,
-        estado_notificado: typeof n.resource_status === 'string' ? n.resource_status : null,
-        payload: n,
-      })
+      .insert({ payment_request_id: prid, estado_notificado: notificado, payload: n })
       .select('id')
       .single();
 
@@ -86,7 +98,7 @@ export function crearHandler(deps: Deps) {
       console.error('Clip status check failed', prid, e instanceof Error ? e.message : e);
       return json({ ok: false, error: 'verificacion' }, 502); // non-2xx so Clip retries
     }
-    const estado = String(clip.status ?? clip.resource_status ?? '').toUpperCase();
+    const estado = estadoDe(clip);
 
     // Find the registration: by any link ever created for it, then by our own reference.
     const { data: link } = await db
@@ -112,7 +124,7 @@ export function crearHandler(deps: Deps) {
     if (evento?.id) {
       await db
         .from('clip_eventos')
-        .update({ estado_verificado: estado || null, inscripcion_id: fila?.id ?? null })
+        .update({ estado_verificado: estado || null, inscripcion_id: fila?.id ?? null, respuesta_clip: clip })
         .eq('id', evento.id);
     }
     if (!fila) {
@@ -127,11 +139,14 @@ export function crearHandler(deps: Deps) {
     if (COMPLETADO.has(estado) && fila.pago_estado !== 'pagado') {
       Object.assign(cambios, {
         pago_estado: 'pagado',
-        pagado_at: fila.pagado_at ?? fechaValida(n.payment_date, n.completed_at) ?? deps.now().toISOString(),
+        pagado_at:
+          fila.pagado_at ??
+          fechaValida(n.payment_date, n.completed_at, clip.payment_date, clip.completed_at, clip.modified_at) ??
+          deps.now().toISOString(),
         clip_payment_request_id: prid,
-        clip_transaction_id: typeof n.transaction_id === 'string' ? n.transaction_id : null,
-        clip_receipt_no: typeof n.receipt_no === 'string' ? n.receipt_no : null,
-        clip_payment_type: typeof n.payment_type === 'string' ? n.payment_type : null,
+        clip_transaction_id: texto(n.transaction_id) ?? texto(clip.transaction_id),
+        clip_receipt_no: texto(n.receipt_no) ?? texto(clip.receipt_no),
+        clip_payment_type: texto(n.payment_type) ?? texto(clip.payment_type),
       });
     }
     const { error } = await db.from('inscripciones').update(cambios).eq('id', fila.id);

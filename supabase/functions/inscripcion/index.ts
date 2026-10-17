@@ -8,6 +8,8 @@
  *     -> returns a valid Clip payment link for an existing registration (creates a new one if expired).
  *   { accion: 'estado', id }
  *     -> returns only whether that registration is paid (used after Clip redirects back).
+ *        If it is still pending, it asks Clip directly about every link created for it, so a
+ *        payment is confirmed even if Clip's webhook is late or missing.
  *
  * Secrets (Supabase > Edge Functions > Secrets):
  *   CLIP_API_KEY, CLIP_SECRET_KEY   Clip credential ("Tienda online")
@@ -40,6 +42,17 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 // Reuse an existing link only if it stays valid at least this long.
 const MARGEN_MS = 30 * 60 * 1000;
+const COMPLETADO = new Set(['CHECKOUT_COMPLETED', 'COMPLETED']);
+
+const estadoDe = (clip: Record<string, unknown>) =>
+  String(clip.status ?? clip.resource_status ?? clip.payment_status ?? '').toUpperCase();
+const textoClip = (v: unknown) => (typeof v === 'string' && v ? v : typeof v === 'number' ? String(v) : null);
+const fechaValida = (...vals: unknown[]) => {
+  for (const v of vals) {
+    if (typeof v === 'string' && Number.isFinite(Date.parse(v))) return new Date(v).toISOString();
+  }
+  return null;
+};
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
@@ -189,13 +202,61 @@ export function crearHandler(deps: Deps) {
     return json(await respuestaConLink(data as Fila));
   }
 
+  /** Asks Clip about every link of a pending registration; marks it paid if one is completed. */
+  async function verificarConClip(id: string, actual: string | null): Promise<boolean> {
+    const key = env.get('CLIP_API_KEY');
+    const secret = env.get('CLIP_SECRET_KEY');
+    if (!key || !secret) return false;
+    const { data: links } = await db.from('clip_links').select('payment_request_id').eq('inscripcion_id', id);
+    const ids = new Set<string>(((links ?? []) as { payment_request_id: string }[]).map((l) => l.payment_request_id));
+    if (actual) ids.add(actual);
+    for (const prid of ids) {
+      const l = { payment_request_id: prid };
+      try {
+        const res = await deps.fetch(`${env.get('CLIP_API_URL') ?? CLIP_API}/${encodeURIComponent(l.payment_request_id)}`, {
+          headers: { Authorization: 'Basic ' + btoa(`${key}:${secret}`) },
+        });
+        if (!res.ok) continue;
+        const clip = (await res.json()) as Record<string, unknown>;
+        const st = estadoDe(clip);
+        if (!COMPLETADO.has(st)) continue;
+        const ahora = deps.now().toISOString();
+        const { error } = await db
+          .from('inscripciones')
+          .update({
+            pago_estado: 'pagado',
+            pagado_at: fechaValida(clip.payment_date, clip.completed_at, clip.modified_at) ?? ahora,
+            clip_payment_request_id: l.payment_request_id,
+            clip_ultimo_estado: st,
+            clip_transaction_id: textoClip(clip.transaction_id),
+            clip_receipt_no: textoClip(clip.receipt_no),
+            clip_payment_type: textoClip(clip.payment_type),
+            clip_actualizado_at: ahora,
+          })
+          .eq('id', id)
+          .eq('pago_estado', 'pendiente');
+        if (error) throw error;
+        return true;
+      } catch (e) {
+        console.error('Clip status check failed', l.payment_request_id, e instanceof Error ? e.message : e);
+      }
+    }
+    return false;
+  }
+
   async function estado(b: Record<string, unknown>) {
     const id = texto(b.id, 36);
     if (!UUID_RE.test(id)) return json({ ok: false, error: 'id' }, 400);
-    const { data, error } = await db.from('inscripciones').select('pago_estado').eq('id', id).maybeSingle();
+    const { data, error } = await db
+      .from('inscripciones')
+      .select('pago_estado,clip_payment_request_id')
+      .eq('id', id)
+      .maybeSingle();
     if (error) throw error;
     if (!data) return json({ ok: false, error: 'no_encontrada' }, 404);
-    return json({ ok: true, pagado: data.pago_estado === 'pagado' });
+    if (data.pago_estado === 'pagado') return json({ ok: true, pagado: true });
+    const pagado = data.pago_estado === 'pendiente' ? await verificarConClip(id, data.clip_payment_request_id) : false;
+    return json({ ok: true, pagado });
   }
 
   return async (req: Request): Promise<Response> => {

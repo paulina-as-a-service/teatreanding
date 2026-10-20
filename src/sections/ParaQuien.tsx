@@ -31,14 +31,20 @@ export default function ParaQuien() {
             eyebrow="El curso"
             title={
               <>
-                De la idea <span className="gradient-text">al escenario</span>, de principio a fin.
+                {CURSO.seccion.tituloLinea1}
+                <br />
+                <span className="gradient-text">{CURSO.seccion.tituloLinea2}</span>
               </>
             }
-            intro="Producir no es solo conseguir recursos: es convertir un proyecto en realidad con tiempos, equipo, presupuesto y ejecución. Este curso te da el mapa completo."
+            intro={CURSO.seccion.intro}
           />
-          <Reveal delay={0.2} className="mt-10 flex items-center gap-5 rounded-3xl border border-line/10 bg-surface/50 p-5 backdrop-blur">
-            <span className="font-display text-5xl font-bold text-accent sm:text-6xl">+120</span>
-            <p className="text-sm text-text/85">{CURSO.historia}</p>
+          <Reveal
+            delay={0.2}
+            className="relative mt-10 flex items-center gap-6 overflow-hidden rounded-3xl bg-gradient-to-br from-brand-violet to-brand-plum p-6 text-white shadow-2xl shadow-brand-violet/30 ring-1 ring-white/15 sm:p-8"
+          >
+            <span className="pointer-events-none absolute -right-10 -top-10 h-40 w-40 rounded-full bg-white/10 blur-2xl" aria-hidden />
+            <span className="relative shrink-0 font-display text-6xl font-bold leading-none sm:text-7xl">+120</span>
+            <p className="relative text-base font-medium leading-snug text-white/95 sm:text-lg">{CURSO.historia}</p>
           </Reveal>
         </div>
 
@@ -52,7 +58,7 @@ export default function ParaQuien() {
           <motion.li variants={fadeUp} className="sm:col-span-2">
             <p className="font-display text-xl font-semibold uppercase tracking-[0.14em] text-ink">Es para ti si…</p>
           </motion.li>
-          {CURSO.publico.map((p, i) => (
+          {CURSO.publico.map((p) => (
             <motion.li
               key={p}
               variants={fadeUp}
@@ -60,9 +66,6 @@ export default function ParaQuien() {
               transition={{ type: 'spring', stiffness: 300, damping: 20 }}
               className="card group relative overflow-hidden p-6"
             >
-              <span className="pointer-events-none absolute -bottom-6 right-3 font-display text-8xl font-bold text-ink/[0.05] transition-colors duration-500 group-hover:text-accent/10">
-                0{i + 1}
-              </span>
               <span className="grid h-10 w-10 place-items-center rounded-full bg-gradient-to-br from-brand-violet to-brand-plum text-white shadow-lg shadow-brand-violet/30">
                 <Check size={18} aria-hidden />
               </span>

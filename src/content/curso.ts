@@ -13,12 +13,18 @@ export const CURSO = {
   // Fuente: copy del reel de lanzamiento (Calendario IG, 15 oct)
   descripcion:
     'Un curso para quienes quieren llevar una idea al escenario de principio a fin. En 20 horas en línea recorres el proceso creativo, administrativo, técnico y operativo de una producción, y lo aplicas a un proyecto propio.',
-  // Fuente: carrusel "¿Este curso es para ti?" (Calendario IG, 3 nov). PENDIENTE: validar público objetivo.
+  // Sección "El curso". Copy final aprobado por la usuaria (20 oct 2026).
+  seccion: {
+    tituloLinea1: 'Obra, concierto o evento:',
+    tituloLinea2: 'de la idea a la ejecución.',
+    intro:
+      'Una obra, un festival, un concierto o una activación de marca siguen la misma lógica de producción: fechas, equipo, presupuesto y montaje. En 20 horas recorres el proceso completo, del concepto a la liquidación, con los formatos y herramientas que usamos en campo.',
+  },
   publico: [
-    'Estudias artes escénicas o carreras afines',
-    'Produces o quieres producir tus propios proyectos',
-    'Trabajas en eventos y quieres ordenar tu proceso',
-    'Eres artista y te toca autoproducirte',
+    'Estudias artes escénicas, producción o carreras afines y nadie te ha enseñado a presupuestar.',
+    'Quieres montar tu propio proyecto y no sabes por dónde empezar.',
+    'Trabajas en eventos y tu proceso vive en llamadas de último minuto.',
+    'Eres artista y te toca producirte, cobrar y facturar.',
   ],
   docente: 'Mauricio Baylón',
   modalidad: 'En línea por Zoom',

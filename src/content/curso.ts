@@ -70,48 +70,42 @@ export type Modulo = {
   titulo: string;
   resumen: string;
   temas: string[];
-  imagen: string;
 };
 
-/**
- * Temario. Fuente: carrusel "Lo que vas a aprender en 20 horas" (Calendario IG, 17 oct), basado en el Temario PDF.
- * PENDIENTE: la usuaria agregará el copy final. Los resúmenes son BORRADOR.
- */
+/** Temario. Copy final aprobado por la usuaria (20 oct 2026), basado en el Temario PDF. */
 export const MODULOS: Modulo[] = [
   {
     numero: '01',
     titulo: 'El proceso creativo',
-    resumen: 'BORRADOR: Del concepto a la dirección creativa. Cómo se define la idea que guía todas las decisiones de la producción.',
-    temas: ['Proceso creativo', 'Dirección creativa'],
-    imagen: '/img/idea.webp',
+    resumen: 'Cómo nace un proyecto, qué etapas sigue y cómo la dirección creativa ordena cada decisión de producción.',
+    temas: ['Proceso creativo', 'Dirección creativa', 'Áreas aliadas'],
   },
   {
     numero: '02',
     titulo: 'El proceso administrativo',
-    resumen: 'BORRADOR: Gestión y producción no son lo mismo. Las herramientas que sostienen cualquier proyecto, de la planeación al dinero.',
-    temas: ['Gestión vs. producción', 'FODA', 'Cronograma', 'Ruta crítica', 'Presupuesto'],
-    imagen: '/img/laptop.webp',
+    resumen:
+      'Planea y cuantifica tu proyecto: objetivos, recursos, cronograma, ruta crítica y un presupuesto con inversión, gastos fijos y escenarios.',
+    temas: ['FODA', 'Cronograma', 'Ruta crítica', 'Presupuesto'],
   },
   {
     numero: '03',
     titulo: 'El proceso técnico',
-    resumen: 'BORRADOR: Los documentos y recorridos que convierten una idea en algo que se puede montar.',
-    temas: ['Rider', 'Planos y diagramas', 'Manual de operación', 'Calling show', 'Scouting de venues'],
-    imagen: '/img/tablet.webp',
+    resumen:
+      'La documentación que te pide cualquier venue o proveedor: rider, planos, diagramas de conexión, manual de operación y calling show. Más scouting de espacios.',
+    temas: ['Rider', 'Planos', 'Calling show', 'Scouting'],
   },
   {
     numero: '04',
     titulo: 'Operación',
-    resumen: 'BORRADOR: Lo que pasa antes, durante y después de la función, incluido lo que nadie planea hasta que lo necesita.',
-    temas: ['Protocolos', 'Protocolo de cancelación', 'Tramitología', 'Montaje', 'Taquilla', 'Liquidaciones'],
-    imagen: '/img/compass.webp',
+    resumen:
+      'Del montaje a la liquidación: protocolos de operación y cancelación, trámites, difusión, control de taquilla y cierre de cuentas.',
+    temas: ['Montaje', 'Tramitología', 'Taquilla', 'Liquidaciones'],
   },
   {
     numero: '05',
     titulo: 'Taller de proyectos',
-    resumen: 'BORRADOR: Aplicas lo visto en el curso a un proyecto propio. PENDIENTE: confirmar con Mauricio el entregable del taller.',
-    temas: ['Proyecto propio', 'Aplicación práctica'],
-    imagen: '/img/palette.webp',
+    resumen: 'Aterrizas todo lo visto en un proyecto propio: concepto, plan, presupuesto y documentación técnica.',
+    temas: ['Proyecto propio', 'Revisión grupal'],
   },
 ];
 

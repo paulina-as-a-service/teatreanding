@@ -8,3 +8,7 @@ verify_jwt = false
 
 [functions.clip-webhook]
 verify_jwt = false
+
+# Called by the database (pg_net) with ?token=, not with a Supabase token.
+[functions.confirmacion-email]
+verify_jwt = false

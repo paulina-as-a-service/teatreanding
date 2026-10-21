@@ -99,7 +99,7 @@ Secretos de las Edge Functions:
 | `CLIP_API_KEY` | API key de la credencial de Clip |
 | `CLIP_SECRET_KEY` | Clave secreta de la credencial de Clip |
 | `CLIP_WEBHOOK_TOKEN` | Texto aleatorio (solo letras y números, 32+ caracteres) |
-| `SITE_URL` | `https://teatranding.bolt.host` |
+| `SITE_URL` | `https://teatranding.com` (cuando el dominio ya cargue el sitio; antes `https://teatranding.bolt.host`) |
 | `CLIP_MONTO` | `1999` (bajarlo solo para un pago de prueba) |
 
 `CLIP_MONTO` debe coincidir con `CURSO.precio.monto` en `src/content/curso.ts`.
@@ -113,3 +113,53 @@ from clip_eventos order by recibido_at desc limit 20;
 
 Clip no tiene modo de pruebas para links de pago: la prueba es un pago real (con `CLIP_MONTO`
 bajo) que después se reembolsa desde el panel de Clip.
+
+## Correo de confirmación (Resend)
+
+Cuando una inscripción pasa a `pago_estado = pagado` (por el webhook de Clip o por la verificación de
+respaldo de la página de éxito), la base de datos llama a la Edge Function `confirmacion-email`, que
+envía el correo con Resend desde `inscripciones@teatranding.com`. Las respuestas de los alumnos llegan
+a `teatranding@gmail.com` (`reply_to`). Cada inscripción recibe un solo correo.
+
+Piezas:
+
+- `supabase/migrations/20261021000000_confirmacion_email.sql`: columnas `confirmacion_*` y trigger.
+- `supabase/functions/confirmacion-email/index.ts`: envío. El texto del correo está al inicio del
+  archivo (`ASUNTO`, `cuerpoTexto`, `cuerpoHtml`).
+- La URL de la función (con su token) se guarda en Supabase Vault como `confirmacion_email_url`.
+
+Secretos de la Edge Function:
+
+| Nombre | Valor |
+|---|---|
+| `RESEND_API_KEY` | API key de Resend con permiso "Sending access", limitada al dominio teatranding.com |
+| `CONFIRMACION_TOKEN` | Texto aleatorio (solo letras y números, 32+ caracteres) |
+| `RESEND_FROM` | Opcional. Por defecto `Teatranding! <inscripciones@teatranding.com>` |
+| `RESEND_REPLY_TO` | Opcional. Por defecto `teatranding@gmail.com` |
+| `ZOOM_URL` | Opcional. Si existe, el correo incluye la liga de Zoom |
+
+Orden de instalación:
+
+1. En Resend, agrega el dominio `teatranding.com` y crea sus registros DNS en GoDaddy
+   (MX y TXT en `send`, TXT en `resend._domainkey`). Espera a que Resend lo marque como verificado.
+2. Despliega `confirmacion-email` con verificación de JWT desactivada y define sus secretos.
+3. Guarda la URL en Vault (SQL Editor):
+   ```sql
+   select vault.create_secret(
+     'https://<PROJECT-REF>.supabase.co/functions/v1/confirmacion-email?token=<CONFIRMACION_TOKEN>',
+     'confirmacion_email_url'
+   );
+   ```
+4. Ejecuta la migración `20261021000000_confirmacion_email.sql`.
+
+Reenviar un correo: en el Table Editor, cambia `confirmacion_estado` de esa inscripción a `reintentar`.
+
+Diagnóstico:
+
+```sql
+select email, pago_estado, confirmacion_estado, confirmacion_intentos, confirmacion_error, confirmacion_enviada_at
+from inscripciones where pago_estado = 'pagado' order by pagado_at desc;
+```
+
+`confirmacion_resend_id` es el ID del correo en el panel de Resend (Emails), donde se ve si fue
+entregado, rebotó o cayó en spam.

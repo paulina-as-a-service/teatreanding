@@ -14,7 +14,7 @@
  * Secrets (Supabase > Edge Functions > Secrets):
  *   CLIP_API_KEY, CLIP_SECRET_KEY   Clip credential ("Tienda online")
  *   CLIP_WEBHOOK_TOKEN              random string, must match the clip-webhook function
- *   SITE_URL                        https://teatranding.bolt.host
+ *   SITE_URL                        https://teatranding.com (antes https://teatranding.bolt.host)
  *   CLIP_MONTO                      optional, defaults to 1999 (use a small amount only for a test payment)
  * Provided automatically by Supabase: SUPABASE_URL and the service key (legacy or new format).
  *

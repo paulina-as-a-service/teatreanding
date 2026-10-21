@@ -109,14 +109,14 @@ export const MODULOS: Modulo[] = [
   },
 ];
 
-/** "Lo que vas a aprender". BORRADOR derivado del temario; la usuaria agregará el copy final. */
+/** "Lo que vas a aprender". Copy final aprobado por la usuaria (20 oct 2026). */
 export const APRENDIZAJES: { titulo: string; texto: string }[] = [
-  { titulo: 'Definir una dirección creativa', texto: 'BORRADOR: Traducir una idea en un concepto claro que oriente al equipo.' },
-  { titulo: 'Planear con cronograma y ruta crítica', texto: 'BORRADOR: Saber qué pasa, cuándo, y qué tareas no pueden retrasarse.' },
-  { titulo: 'Armar un presupuesto desde cero', texto: 'BORRADOR: Inversión original, gastos fijos y escenarios posibles.' },
-  { titulo: 'Leer y escribir un rider', texto: 'BORRADOR: Requerimientos técnicos y de hospitalidad sin ambigüedades.' },
-  { titulo: 'Elegir y evaluar un venue', texto: 'BORRADOR: Reporte de scouting y registro fotográfico.' },
-  { titulo: 'Operar el día de la función', texto: 'BORRADOR: Montaje, calling show, taquilla y liquidaciones.' },
+  { titulo: 'Definir una dirección creativa', texto: 'Conviertes tu idea en un concepto que guía a todo tu equipo.' },
+  { titulo: 'Planear con cronograma y ruta crítica', texto: 'Sabes qué pasa, cuándo pasa y qué tareas no puedes dejar que se retrasen.' },
+  { titulo: 'Armar un presupuesto desde cero', texto: 'Calculas inversión, gastos fijos y escenarios antes de mover un peso.' },
+  { titulo: 'Leer y escribir un rider', texto: 'Pides lo que tu proyecto necesita y entiendes lo que te piden a ti.' },
+  { titulo: 'Elegir y evaluar un venue', texto: 'Haces scouting, reporte y registro fotográfico antes de comprometerte.' },
+  { titulo: 'Operar el día del evento', texto: 'Coordinas montaje, calling show, taquilla y liquidación al cierre.' },
 ];
 
 /** Palabras para la marquesina. Todas salen del temario. */

@@ -145,9 +145,9 @@
       transform: translateX(-50%);
     }
   }
-  /* Ticker de reseñas: una vuelta completa cada 9 s, se pausa al pasar el cursor o enfocar */
+  /* Ticker de reseñas: una vuelta completa cada 15 s, se pausa al pasar el cursor o enfocar */
   .resenas-track {
-    animation: marquee 9s linear infinite;
+    animation: marquee 15s linear infinite;
   }
   .resenas-ticker:hover .resenas-track,
   .resenas-ticker:focus-within .resenas-track {

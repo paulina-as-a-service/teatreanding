@@ -164,13 +164,27 @@ export const DOCENTE = {
 };
 
 /**
- * Testimonios. PENDIENTE: reemplazar con testimonios reales (con permiso de cada persona).
- * Mientras `pendiente` sea true, la tarjeta se muestra como espacio reservado.
+ * Testimonios reales de asistentes. Sin nombres por decisión de la usuaria (20 oct 2026);
+ * solo se muestra la etiqueta del programa que tomaron.
  */
-export const TESTIMONIOS: { nombre: string; rol: string; texto: string; pendiente?: boolean }[] = [
-  { nombre: '[Nombre]', rol: '[Seminario y año]', texto: '[Testimonio real pendiente]', pendiente: true },
-  { nombre: '[Nombre]', rol: '[Seminario y año]', texto: '[Testimonio real pendiente]', pendiente: true },
-  { nombre: '[Nombre]', rol: '[Seminario y año]', texto: '[Testimonio real pendiente]', pendiente: true },
+export const TESTIMONIOS: { texto: string; programa: string }[] = [
+  {
+    texto: 'Me gustó mucho lo dinámico de las clases, las tareas, lo personalizado que se volvió a pesar de que éramos bastantes.',
+    programa: 'Asistente, seminario en línea de Teatranding!',
+  },
+  {
+    texto:
+      'Agradezco mucho la oportunidad que me brindaron al permitirme asistir al curso, conocerles y orientarme de una manera profesional y clara sobre lo que implica producir un proyecto escénico.',
+    programa: 'Asistente, curso en línea de Teatranding!',
+  },
+  {
+    texto: 'Que fue totalmente práctico y creo que los ejercicios fueron muy buenos y puntuales, cada uno cumplió un objetivo específico.',
+    programa: 'Asistente, workshop en línea de Teatranding!',
+  },
+  {
+    texto: 'Disfruté mucho las clases, espero poder dedicarme a esto pronto.',
+    programa: 'Asistente, seminario en línea de Teatranding!',
+  },
 ];
 
 /** Versión del aviso de privacidad vigente; se guarda con cada registro. */

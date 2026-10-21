@@ -1,5 +1,5 @@
 import { motion } from 'framer-motion';
-import { Quote } from 'lucide-react';
+import { GraduationCap, Quote } from 'lucide-react';
 import { TESTIMONIOS } from '../content/curso';
 import { SectionHeading } from '../components/ui';
 import { fadeUp, stagger } from '../components/motion';
@@ -13,10 +13,10 @@ export default function Testimonios() {
           align="center"
           eyebrow="Testimonios"
           title="Lo que dice nuestra comunidad"
-          intro="Quienes ya pasaron por los seminarios de Teatranding!"
+          intro="Quienes ya pasaron por los cursos, seminarios y workshops de Teatranding!"
         />
         <motion.ul
-          className="mt-14 grid gap-5 md:grid-cols-3"
+          className="mx-auto mt-14 grid max-w-5xl gap-5 md:grid-cols-2"
           initial="hidden"
           whileInView="show"
           viewport={{ once: true, margin: '0px 0px -10% 0px' }}
@@ -28,22 +28,15 @@ export default function Testimonios() {
               variants={fadeUp}
               whileHover={{ y: -8, rotate: i % 2 === 0 ? -0.6 : 0.6 }}
               transition={{ type: 'spring', stiffness: 260, damping: 20 }}
-              className={`card relative flex flex-col p-7 ${t.pendiente ? '!border-dashed !border-highlight/40' : ''} ${
-                i === 1 ? 'md:translate-y-8' : ''
-              }`}
+              className={`card relative flex flex-col p-7 ${i % 2 === 1 ? 'md:translate-y-8' : ''}`}
             >
               <Quote size={34} className="text-accent/40" aria-hidden />
-              <blockquote className={`mt-4 flex-1 text-lg leading-relaxed ${t.pendiente ? 'italic text-text/60' : 'text-ink'}`}>
-                {t.texto}
-              </blockquote>
+              <blockquote className="mt-4 flex-1 text-lg leading-relaxed text-ink">“{t.texto}”</blockquote>
               <footer className="mt-6 flex items-center gap-3 border-t border-line/10 pt-5">
-                <span className="grid h-11 w-11 place-items-center rounded-full bg-gradient-to-br from-brand-violet to-brand-plum font-display text-lg font-bold text-white">
-                  {t.pendiente ? '?' : t.nombre.charAt(0)}
+                <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-gradient-to-br from-brand-violet to-brand-plum text-white">
+                  <GraduationCap size={18} aria-hidden />
                 </span>
-                <span>
-                  <span className="block font-bold text-ink">{t.nombre}</span>
-                  <span className="block text-sm text-text/70">{t.rol}</span>
-                </span>
+                <span className="text-sm font-medium text-text/80">{t.programa}</span>
               </footer>
             </motion.li>
           ))}

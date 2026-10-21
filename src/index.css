@@ -145,9 +145,21 @@
       transform: translateX(-50%);
     }
   }
+  /* Ticker de reseñas: una vuelta completa cada 9 s, se pausa al pasar el cursor o enfocar */
+  .resenas-track {
+    animation: marquee 9s linear infinite;
+  }
+  .resenas-ticker:hover .resenas-track,
+  .resenas-ticker:focus-within .resenas-track {
+    animation-play-state: paused;
+  }
   @media (prefers-reduced-motion: reduce) {
-    .marquee-track {
+    .marquee-track,
+    .resenas-track {
       animation: none;
+    }
+    .resenas-ticker {
+      overflow-x: auto;
     }
   }
 }

@@ -137,17 +137,29 @@ export const MARQUESINA = [
 
 /**
  * Docente. Cargos tomados del reconocimiento del curso y del Calendario IG.
- * PENDIENTE: semblanza y trayectoria (la usuaria agregará el copy).
  */
 export const DOCENTE = {
   nombre: 'Mauricio Baylón',
   cargos: ['Cofundador de Teatranding!', 'Coordinador de Actividades Académicas'],
   foto: '/img/mauricio-baylon.webp',
-  semblanza: 'PENDIENTE: Semblanza de Mauricio Baylón. Quién es, cómo llegó a la producción y por qué creó este curso.',
+  // Copy final aprobado por la usuaria (20 oct 2026). Cada elemento es un párrafo.
+  semblanza: [
+    'Mauricio Baylón es productor y project manager con más de diez años en teatro, eventos y experiencias inmersivas. Estudió Literatura Dramática y Teatro en la UNAM, y desde entonces su trabajo cruza la creación escénica, la producción y la escenotecnia.',
+    'Fue gerente de producción en Mejor Teatro y ha trabajado como jefe de utilería y stage manager en giras de musicales como Beetlejuice, Tina y Pretty Woman con GOU Producciones. Hoy coordina proyectos de museografía multimedia en Cocolab International para clientes como Clase Azul, Omnilife y CFE.',
+    'En 2020 cofundó Teatranding! para cubrir lo que las escuelas no enseñan: presupuestos, riders, trámites y liquidaciones. Este curso reúne los procesos y formatos que usa en su trabajo diario.',
+  ],
   trayectoria: [
-    { anio: '[Año]', titulo: '[Proyecto o cargo 1]', detalle: 'PENDIENTE: descripción breve.' },
-    { anio: '[Año]', titulo: '[Proyecto o cargo 2]', detalle: 'PENDIENTE: descripción breve.' },
-    { anio: '[Año]', titulo: '[Proyecto o cargo 3]', detalle: 'PENDIENTE: descripción breve.' },
+    {
+      anio: '2022-2026',
+      titulo: 'Cocolab International',
+      detalle: 'Coordinación de museografía multimedia y experiencias inmersivas para WMF, CFE, Omnilife y Clase Azul.',
+    },
+    {
+      anio: '2022-2025',
+      titulo: 'GOU Producciones',
+      detalle: 'Utilería y stage management en giras de Beetlejuice, Tina, Pretty Woman y Bluey.',
+    },
+    { anio: '2016-2019', titulo: 'Mejor Teatro', detalle: 'Gerente de producción.' },
   ],
 };
 

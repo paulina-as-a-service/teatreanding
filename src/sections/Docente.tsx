@@ -82,15 +82,17 @@ export default function Docente() {
               </motion.li>
             ))}
           </motion.ul>
-          <motion.p
-            className="mt-6 text-lg text-text/90"
+          <motion.div
+            className="mt-6 space-y-4 text-lg text-text/90"
             initial={{ opacity: 0, y: 20 }}
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true }}
             transition={{ delay: 0.3, duration: 0.7 }}
           >
-            <Copy text={DOCENTE.semblanza} />
-          </motion.p>
+            {DOCENTE.semblanza.map((parrafo) => (
+              <p key={parrafo}>{parrafo}</p>
+            ))}
+          </motion.div>
 
           <h3 className="mt-12 font-display text-xl font-semibold uppercase tracking-[0.16em] text-ink">Trayectoria</h3>
           <motion.ol

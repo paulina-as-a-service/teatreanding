@@ -3,7 +3,6 @@ import { AnimatePresence, motion, useScroll, useTransform } from 'framer-motion'
 import { Plus, Sparkles } from 'lucide-react';
 import { APRENDIZAJES, MODULOS } from '../content/curso';
 import { Copy, SectionHeading } from '../components/ui';
-import ModuloIlustracion from '../components/ModuloIlustracion';
 import { fadeUp, stagger } from '../components/motion';
 
 export default function Temario() {
@@ -17,34 +16,24 @@ export default function Temario() {
       <div className="bg-stage-grid absolute inset-0 -z-10 [mask-image:linear-gradient(to_bottom,transparent,black_20%,black_80%,transparent)]" />
       <div className="page">
         <div className="grid gap-12 lg:grid-cols-[0.8fr_1.2fr]">
-          {/* Sticky intro with the module's illustration */}
+          {/* Sticky intro with the section image */}
           <div className="lg:sticky lg:top-28 lg:self-start">
             <SectionHeading
               eyebrow="Contenido del curso"
               title="5 módulos, 20 horas, un proyecto propio."
               intro="Recorres las cuatro etapas de una producción y cierras con un taller donde aplicas todo a tu proyecto."
             />
-            <motion.div
-              style={{ y }}
-              className="relative mt-10 hidden aspect-square w-72 rounded-[2rem] border border-line/10 bg-surface/60 p-8 shadow-[0_30px_60px_-30px_rgba(46,37,162,0.45)] backdrop-blur lg:block"
+            <motion.img
+              src="/img/laptop-temario.webp"
+              alt=""
               aria-hidden
-            >
-              <AnimatePresence mode="wait">
-                <motion.div
-                  key={MODULOS[open]?.numero ?? 'none'}
-                  className="absolute inset-8"
-                  initial={{ opacity: 0, scale: 0.9, y: 12 }}
-                  animate={{ opacity: 1, scale: 1, y: 0 }}
-                  exit={{ opacity: 0, scale: 0.92, y: -12 }}
-                  transition={{ duration: 0.45, ease: [0.22, 1, 0.36, 1] }}
-                >
-                  <ModuloIlustracion numero={MODULOS[open]?.numero ?? MODULOS[0].numero} className="h-full w-full" />
-                </motion.div>
-              </AnimatePresence>
-              <span className="absolute bottom-4 right-6 font-display text-sm font-semibold uppercase tracking-[0.2em] text-text/60">
-                Módulo {MODULOS[open]?.numero ?? MODULOS[0].numero}
-              </span>
-            </motion.div>
+              style={{ y }}
+              className="relative mt-12 hidden w-80 drop-shadow-[0_30px_40px_rgba(46,37,162,0.35)] lg:block"
+              initial={{ opacity: 0, scale: 0.9 }}
+              whileInView={{ opacity: 1, scale: 1 }}
+              viewport={{ once: true }}
+              transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
+            />
           </div>
 
           {/* Module accordion */}

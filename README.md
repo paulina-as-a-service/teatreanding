@@ -136,6 +136,8 @@ Secretos de la Edge Function:
 | `CONFIRMACION_TOKEN` | Texto aleatorio (solo letras y números, 32+ caracteres) |
 | `RESEND_FROM` | Opcional. Por defecto `Teatranding! <inscripciones@teatranding.com>` |
 | `RESEND_REPLY_TO` | Opcional. Por defecto `teatranding@gmail.com` |
+| `SITE_URL` | El mismo de `inscripcion`. El logo del correo se carga de `SITE_URL/img/logo-correo.png` (el sitio publicado debe incluir ese archivo) |
+| `LOGO_URL` | Opcional. URL completa del logo, si se quiere servir desde otro lugar |
 | `ZOOM_URL` | Obligatorio. Liga de Zoom (con `?pwd=`). Sin ella, no se envía y la fila queda en `error` |
 
 Orden de instalación:

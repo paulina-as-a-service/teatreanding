@@ -15,6 +15,8 @@
  *   CONFIRMACION_TOKEN      random string; the same value goes in the Vault URL (?token=...)
  *   RESEND_FROM             optional, default "Teatranding! <inscripciones@teatranding.com>"
  *   RESEND_REPLY_TO         optional, default "teatranding@gmail.com"
+ *   SITE_URL                shared with `inscripcion`; the logo is loaded from SITE_URL/img/logo-correo.png
+ *   LOGO_URL                optional; full URL of the logo image, overrides the one above
  *   ZOOM_URL                required; Zoom link with passcode (if missing, the row is marked 'error')
  * Provided automatically: SUPABASE_URL and the service key (legacy or new format).
  *
@@ -86,7 +88,17 @@ export function cuerpoTexto(nombre: string, zoomUrl: string): string {
   ].join('\n');
 }
 
-export function cuerpoHtml(nombre: string, zoomUrl: string): string {
+/** Hat mark + wordmark. The wordmark is live text, so it still shows when the client blocks images. */
+function encabezado(logoUrl: string | null): string {
+  const img = logoUrl
+    ? `<img src="${escapar(logoUrl)}" width="56" height="59" alt="Teatranding!" style="display:block;margin:0 auto 10px;border:0;">`
+    : '';
+  return `<div style="text-align:center;padding-bottom:20px;margin-bottom:24px;border-bottom:1px solid #ece8f6;">
+      ${img}<div style="font-size:18px;letter-spacing:6px;font-weight:bold;"><span style="color:#aa3277;">Teatran</span><span style="color:#454546;">ding</span><span style="color:#aa3277;">!</span></div>
+    </div>`;
+}
+
+export function cuerpoHtml(nombre: string, zoomUrl: string, logoUrl: string | null = null): string {
   const n = escapar(nombre);
   const z = escapar(zoomUrl);
   const filas = DETALLES.map(
@@ -97,6 +109,7 @@ export function cuerpoHtml(nombre: string, zoomUrl: string): string {
 <html lang="es">
 <body style="margin:0;padding:24px;background:#f4f2fb;font-family:Arial,Helvetica,sans-serif;color:#1d1a3a;">
   <div style="max-width:560px;margin:0 auto;background:#ffffff;border-radius:12px;padding:32px;line-height:1.55;font-size:15px;">
+    ${encabezado(logoUrl)}
     <p style="margin-top:0;"><strong>¡Muchas gracias por tu compra, ${n}!</strong> Tu pago ha sido recibido con éxito 🎉</p>
     <p>¡Te damos la más cordial bienvenida a <strong>${CURSO_NOMBRE}</strong>! Tu lugar ya está completamente asegurado.</p>
     <h2 style="font-size:17px;margin:28px 0 8px;">📌 Detalles del curso</h2>
@@ -198,6 +211,9 @@ export function crearHandler(deps: Deps) {
     if (!reclamada?.length) return json({ ok: true, omitido: true, motivo: 'en_curso' });
 
     const nombre = (fila.nombre ?? '').trim();
+    // Logo served by the site itself (public/img/logo-correo.png). LOGO_URL overrides it.
+    const site = (env.get('SITE_URL') ?? '').trim().replace(/\/+$/, '');
+    const logoUrl = env.get('LOGO_URL')?.trim() || (site ? `${site}/img/logo-correo.png` : null);
     const zoomUrl = env.get('ZOOM_URL')?.trim() ?? '';
     if (!zoomUrl) {
       // Never send the confirmation without the Zoom link. Set ZOOM_URL, then mark 'reintentar'.
@@ -220,7 +236,7 @@ export function crearHandler(deps: Deps) {
           to: [fila.email],
           reply_to: env.get('RESEND_REPLY_TO') || REPLY_TO_DEFAULT,
           subject: ASUNTO,
-          html: cuerpoHtml(nombre, zoomUrl),
+          html: cuerpoHtml(nombre, zoomUrl, logoUrl),
           text: cuerpoTexto(nombre, zoomUrl),
           tags: [{ name: 'tipo', value: 'confirmacion_pago' }],
         }),

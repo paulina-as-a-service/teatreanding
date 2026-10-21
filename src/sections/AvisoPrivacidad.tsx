@@ -14,7 +14,7 @@ const RESPONSABLE = {
     'Calle Tochtli, Manzana 9, Interior Lote 6, Colonia Pedregal de Santo Domingo, Alcaldía Coyoacán, C.P. 04369, Ciudad de México',
   email: CURSO.contacto.email,
 };
-const ULTIMA_ACTUALIZACION = '16 de octubre de 2026';
+const ULTIMA_ACTUALIZACION = '21 de octubre de 2026';
 
 const H = ({ children }: { children: ReactNode }) => (
   <h3 className="mt-8 font-display text-lg font-semibold uppercase tracking-[0.12em] text-ink first:mt-0">{children}</h3>
@@ -104,6 +104,10 @@ export default function AvisoPrivacidad() {
                     <li>Correo electrónico.</li>
                     <li>El motivo por el que te interesa el curso (texto libre).</li>
                     <li>Tus preferencias de consentimiento y la fecha en que las otorgaste.</li>
+                    <li>
+                      Si solicitas el descuento para estudiantes: si eres estudiante activo y una imagen o PDF de tu credencial
+                      de estudiante vigente, que puedes subir en el formulario o enviarnos por correo electrónico.
+                    </li>
                   </UL>
                   <P>
                     No solicitamos datos personales sensibles. Te pedimos no incluirlos en el campo de texto libre. Si llegaras a
@@ -122,6 +126,7 @@ export default function AvisoPrivacidad() {
                   <UL>
                     <li>Registrar tu solicitud de inscripción al curso.</li>
                     <li>Identificar y confirmar tu pago.</li>
+                    <li>Validar que cumples los requisitos del descuento para estudiantes, si lo solicitas.</li>
                     <li>Registrar tu asistencia a las sesiones y emitir tu reconocimiento de participación al concluir el curso.</li>
                     <li>Contactarte sobre tu inscripción, el pago y la logística del curso, incluido el acceso a las sesiones en línea.</li>
                     <li>Conocer tus intereses para adaptar los contenidos del curso.</li>
@@ -161,7 +166,18 @@ export default function AvisoPrivacidad() {
                     requerimiento fundado y motivado de una autoridad competente.
                   </P>
 
-                  <H>6. Derechos ARCO</H>
+                  <H>6. Conservación de tu credencial de estudiante</H>
+                  <P>
+                    Tu credencial solo se usa para validar el descuento para estudiantes y únicamente la consulta el
+                    Responsable. Se guarda en un almacenamiento privado y se elimina en cuanto se resuelve tu solicitud, ya sea
+                    aprobada o rechazada. Si nos la envías por correo electrónico, eliminamos ese correo al concluir la
+                    validación. En cualquier caso, no conservamos ninguna credencial después de la última sesión del curso.
+                  </P>
+                  <P>
+                    Del resto de tu registro solo conservamos si solicitaste el descuento, el resultado y el monto pagado.
+                  </P>
+
+                  <H>7. Derechos ARCO</H>
                   <P>
                     Tienes derecho a conocer qué datos tenemos de ti y cómo los usamos (Acceso), a pedir su corrección si son
                     inexactos o incompletos (Rectificación), a solicitar que los eliminemos de nuestros registros (Cancelación) y a
@@ -176,33 +192,33 @@ export default function AvisoPrivacidad() {
                   </UL>
                   <P>Responderemos tu solicitud dentro de los plazos que establece la ley, por el mismo medio por el que la recibimos.</P>
 
-                  <H>7. Revocación del consentimiento y limitación del uso</H>
+                  <H>8. Revocación del consentimiento y limitación del uso</H>
                   <P>
                     Puedes revocar el consentimiento que nos otorgaste o pedirnos que limitemos el uso o divulgación de tus datos
                     escribiendo a {RESPONSABLE.email}. Ten en cuenta que, si revocas el consentimiento para las finalidades
                     primarias, es posible que no podamos continuar con tu inscripción.
                   </P>
 
-                  <H>8. Cookies y tecnologías similares</H>
+                  <H>9. Cookies y tecnologías similares</H>
                   <P>
                     Este sitio no utiliza cookies de rastreo ni herramientas de analítica. Solo guarda en tu navegador tu
                     preferencia de tema (claro u oscuro), que no constituye un dato personal y puedes borrar desde la
                     configuración de tu navegador.
                   </P>
 
-                  <H>9. Menores de edad</H>
+                  <H>10. Menores de edad</H>
                   <P>
                     Si eres menor de edad, la inscripción debe realizarla tu madre, padre o tutor, quien otorgará el
                     consentimiento correspondiente.
                   </P>
 
-                  <H>10. Cambios a este aviso</H>
+                  <H>11. Cambios a este aviso</H>
                   <P>
                     Cualquier modificación a este Aviso de privacidad se publicará en esta misma página, indicando la fecha de la
                     última actualización.
                   </P>
 
-                  <H>11. Autoridad</H>
+                  <H>12. Autoridad</H>
                   <P>
                     Si consideras que tu derecho a la protección de datos personales ha sido vulnerado, puedes acudir ante la
                     Secretaría Anticorrupción y Buen Gobierno, autoridad competente en la materia.

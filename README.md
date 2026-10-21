@@ -100,9 +100,9 @@ Secretos de las Edge Functions:
 | `CLIP_SECRET_KEY` | Clave secreta de la credencial de Clip |
 | `CLIP_WEBHOOK_TOKEN` | Texto aleatorio (solo letras y números, 32+ caracteres) |
 | `SITE_URL` | `https://teatranding.com` (cuando el dominio ya cargue el sitio; antes `https://teatranding.bolt.host`) |
-| `CLIP_MONTO` | `1999` (bajarlo solo para un pago de prueba) |
 
-`CLIP_MONTO` debe coincidir con `CURSO.precio.monto` en `src/content/curso.ts`.
+El monto que cobra Clip es la columna `monto` de cada inscripción (1999 por defecto; 1499 cuando se
+aprueba un descuento de estudiante). El secreto `CLIP_MONTO` ya no se usa y se puede borrar.
 
 Diagnóstico:
 
@@ -111,8 +111,9 @@ select recibido_at, payment_request_id, estado_notificado, estado_verificado, in
 from clip_eventos order by recibido_at desc limit 20;
 ```
 
-Clip no tiene modo de pruebas para links de pago: la prueba es un pago real (con `CLIP_MONTO`
-bajo) que después se reembolsa desde el panel de Clip.
+Clip no tiene modo de pruebas para links de pago: la prueba es un pago real que después se reembolsa
+desde el panel de Clip. Para probar con un monto bajo, en el Table Editor cambia `monto` de tu
+inscripción de prueba (y vacía `clip_payment_url`) antes de pedir el link.
 
 ## Correo de confirmación (Resend)
 
@@ -165,3 +166,72 @@ from inscripciones where pago_estado = 'pagado' order by pagado_at desc;
 
 `confirmacion_resend_id` es el ID del correo en el panel de Resend (Emails), donde se ve si fue
 entregado, rebotó o cayó en spam.
+
+## Descuento para estudiantes (25%: $1,499)
+
+Quien responde "Sí" a "¿Eres estudiante activo?" no recibe link de pago de inmediato. Mauricio valida su
+credencial vigente desde una página del sitio, sin entrar a Supabase, Clip ni la Google Sheet.
+
+Flujo:
+
+1. Formulario: la persona puede subir su credencial (opcional, foto o PDF de hasta 5 MB). Se guarda en el
+   bucket privado `documentos-estudiantes` con un link de subida firmado.
+2. La página marca la solicitud como lista (`estudiante_listo_at`) y la base de datos llama a la Edge Function
+   `estudiantes`, que envía:
+   - al alumno: "Recibimos tu credencial", o "Envíanos tu credencial" (responder el correo, 72 h de plazo);
+   - a `teatranding@gmail.com`: la notificación con los botones **Aprobar descuento** y **Rechazar**.
+3. Los botones abren `SITE_URL/?revision=<clave firmada>`, que muestra los datos y la credencial (link de
+   10 minutos). Abrir la página no cambia nada; la decisión se guarda solo al presionar "Confirmar".
+   - Aprobar: `monto = 1499` y el alumno recibe el link `SITE_URL/?pagar=<id>`.
+   - Rechazar: Mauricio elige un motivo de la lista (`MOTIVOS` en `supabase/functions/estudiantes/index.ts`),
+     `monto = 1999` y el alumno recibe el motivo y el mismo tipo de link.
+   - En ambos casos la credencial se borra de Storage.
+4. `?pagar=<id>` pide a `inscripcion` un link de Clip nuevo con el `monto` de esa inscripción y redirige a
+   Clip. Así el link del correo no vence y el webhook de Clip reconoce el pago.
+5. Tarea programada (pg_cron `estudiantes-revision`, cada hora en el minuto 17):
+   - completa solicitudes que la página no cerró (30 min) o cuyo primer correo falló,
+   - un recordatorio al alumno sin credencial a las 48 h,
+   - a las 72 h sin credencial subida, aviso a Mauricio con los mismos botones (si la mandó por correo,
+     decide; si no, rechaza con "No envió su credencial a tiempo"),
+   - después de la última sesión, borra cualquier credencial de solicitudes que nadie decidió.
+
+Los textos de los correos están en `supabase/functions/estudiantes/index.ts` (`correos`).
+La Google Sheet muestra tres columnas nuevas: Estudiante, Descuento estudiante y Monto.
+
+Secretos de la Edge Function `estudiantes`:
+
+| Nombre | Valor |
+|---|---|
+| `RESEND_API_KEY` | La misma de `confirmacion-email` |
+| `ESTUDIANTES_TOKEN` | Texto aleatorio (solo letras y números, 32+ caracteres) |
+| `ESTUDIANTES_FIRMA` | Otro texto aleatorio (32+ caracteres). Firma los links de revisión; si cambia, los links ya enviados dejan de funcionar |
+| `SITE_URL` | El mismo de `inscripcion` |
+| `REVISION_EMAIL` | Opcional. Por defecto `teatranding@gmail.com` |
+
+Orden de instalación:
+
+1. Despliega `inscripcion` (actualizada) y `estudiantes` con verificación de JWT desactivada, y define los
+   secretos de `estudiantes`.
+2. Guarda la URL en Vault (SQL Editor):
+   ```sql
+   select vault.create_secret(
+     'https://<PROJECT-REF>.supabase.co/functions/v1/estudiantes?token=<ESTUDIANTES_TOKEN>',
+     'estudiantes_url'
+   );
+   ```
+3. Ejecuta la migración `20261021120000_descuento_estudiantes.sql` (crea el bucket, las columnas, los triggers
+   y la tarea programada; requiere la extensión `pg_cron`, disponible en Supabase).
+4. Actualiza el Apps Script de la Google Sheet con `integrations/google-sheets/Code.gs`, corre `configurar`
+   (reescribe los encabezados) y publica una versión nueva del deployment existente
+   (Implementar > Administrar implementaciones > editar > Versión nueva) para conservar la misma URL.
+5. Publica el sitio.
+
+Diagnóstico:
+
+```sql
+select email, estudiante_estado, monto, estudiante_listo_at, estudiante_correo_alumno_at,
+       estudiante_recordatorio_at, estudiante_plazo_aviso_at, estudiante_decidido_at, estudiante_error
+from inscripciones where es_estudiante order by estudiante_solicitud_at desc;
+
+select * from cron.job_run_details where command like '%estudiantes_tick%' order by start_time desc limit 5;
+```

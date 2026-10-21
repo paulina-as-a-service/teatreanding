@@ -6,6 +6,12 @@
  *     -> saves (or refreshes) the registration and returns its Clip payment link.
  *   { accion: 'link', id }
  *     -> returns a valid Clip payment link for an existing registration (creates a new one if expired).
+ *   { accion: 'registrar', ..., esEstudiante: true }
+ *     -> saves the registration as a student-discount request (no payment link yet) and returns a
+ *        signed upload URL for the student ID in the private bucket `documentos-estudiantes`.
+ *   { accion: 'estudiante_listo', id }
+ *     -> called after the optional upload. Marks the request as ready; a database trigger then calls
+ *        the `estudiantes` function, which sends the emails to the student and to Mauricio.
  *   { accion: 'estado', id }
  *     -> returns only whether that registration is paid (used after Clip redirects back).
  *        If it is still pending, it asks Clip directly about every link created for it, so a
@@ -15,7 +21,9 @@
  *   CLIP_API_KEY, CLIP_SECRET_KEY   Clip credential ("Tienda online")
  *   CLIP_WEBHOOK_TOKEN              random string, must match the clip-webhook function
  *   SITE_URL                        https://teatranding.com (antes https://teatranding.bolt.host)
- *   CLIP_MONTO                      optional, defaults to 1999 (use a small amount only for a test payment)
+ *
+ * The amount charged comes from the registration's `monto` column (1999 by default, 1499 once a
+ * student discount is approved by the `estudiantes` function). CLIP_MONTO is no longer used.
  * Provided automatically by Supabase: SUPABASE_URL and the service key (legacy or new format).
  *
  * Deploy with JWT verification OFF (the function validates its own input).
@@ -33,9 +41,17 @@ type Fila = {
   pago_estado: string;
   clip_payment_url: string | null;
   clip_link_expires_at: string | null;
+  monto: number | string;
+  es_estudiante: boolean;
+  estudiante_estado: string | null;
 };
 
-const COLUMNAS = 'id,nombre,apellidos,email,pago_estado,clip_payment_url,clip_link_expires_at';
+const COLUMNAS =
+  'id,nombre,apellidos,email,pago_estado,clip_payment_url,clip_link_expires_at,monto,es_estudiante,estudiante_estado';
+const BUCKET = 'documentos-estudiantes';
+const PENDIENTES = new Set(['pendiente_documento', 'en_revision']);
+/** Student request still waiting for Mauricio's decision: no payment link until then. */
+const enRevision = (f: Fila) => f.es_estudiante && PENDIENTES.has(f.estudiante_estado ?? '');
 const CLIP_API = 'https://api.payclip.com/v2/checkout';
 const DESCRIPCION = 'Curso Introducción a la Producción Creativa para eventos y entretenimiento (Teatranding!)';
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
@@ -81,8 +97,8 @@ export function crearHandler(deps: Deps) {
     const token = env.get('CLIP_WEBHOOK_TOKEN');
     if (!key || !secret || !site || !supabaseUrl || !token) throw new Error('Faltan secretos de Clip o SITE_URL');
 
-    const monto = Number(env.get('CLIP_MONTO') ?? '1999');
-    if (!Number.isFinite(monto) || monto < 1) throw new Error('CLIP_MONTO inválido');
+    const monto = Number(f.monto ?? 1999);
+    if (!Number.isFinite(monto) || monto < 1) throw new Error(`Monto inválido para ${f.id}: ${f.monto}`);
 
     const res = await deps.fetch(env.get('CLIP_API_URL') ?? CLIP_API, {
       method: 'POST',
@@ -90,7 +106,7 @@ export function crearHandler(deps: Deps) {
       body: JSON.stringify({
         amount: Math.round(monto * 100) / 100,
         currency: 'MXN',
-        purchase_description: DESCRIPCION,
+        purchase_description: monto < 1999 ? `${DESCRIPCION} · Precio estudiante` : DESCRIPCION,
         redirection_url: {
           success: `${site}/?pago=exito&ref=${f.id}`,
           error: `${site}/?pago=error&ref=${f.id}`,
@@ -139,12 +155,14 @@ export function crearHandler(deps: Deps) {
   /** Returns the response body for a registration that needs a payment link. */
   async function respuestaConLink(f: Fila) {
     if (f.pago_estado === 'pagado') return { ok: true, id: f.id, ya_pagado: true };
-    if (linkVigente(f)) return { ok: true, id: f.id, payment_url: f.clip_payment_url };
+    if (enRevision(f)) return { ok: true, id: f.id, estudiante: true, en_revision: true, payment_url: null };
+    const monto = Number(f.monto ?? 1999);
+    if (linkVigente(f)) return { ok: true, id: f.id, monto, payment_url: f.clip_payment_url };
     try {
-      return { ok: true, id: f.id, payment_url: await crearLinkClip(f) };
+      return { ok: true, id: f.id, monto, payment_url: await crearLinkClip(f) };
     } catch (e) {
       console.error('Clip link error', f.id, e instanceof Error ? e.message : e);
-      return { ok: true, id: f.id, payment_url: null, error_pago: true };
+      return { ok: true, id: f.id, monto, payment_url: null, error_pago: true };
     }
   }
 
@@ -169,6 +187,8 @@ export function crearHandler(deps: Deps) {
     if (!datos.aviso_version) campos.push('avisoVersion');
     if (campos.length) return json({ ok: false, error: 'validacion', campos }, 400);
 
+    const esEstudiante = b.esEstudiante === true;
+
     // One registration per email: reuse the latest one and refresh its details.
     const { data: previas, error: errSel } = await db
       .from('inscripciones')
@@ -178,19 +198,85 @@ export function crearHandler(deps: Deps) {
       .limit(1);
     if (errSel) throw errSel;
     const previa = (previas?.[0] ?? null) as Fila | null;
+    if (previa?.pago_estado === 'pagado') return json({ ok: true, id: previa.id, ya_pagado: true });
+
+    // What changes on the row depending on the "¿Eres estudiante?" answer.
+    let extra: Record<string, unknown>;
+    if (!esEstudiante) {
+      extra = { es_estudiante: false, estudiante_estado: null, monto: 1999 };
+    } else if (previa?.es_estudiante && previa.estudiante_estado === 'validado') {
+      extra = {}; // already approved: keep the discount and go straight to payment
+    } else if (previa && enRevision(previa)) {
+      extra = {}; // request in progress: allow a new upload, keep its dates
+    } else {
+      // New request (also after a rejection). The old full-price link is dropped.
+      extra = {
+        es_estudiante: true,
+        estudiante_estado: 'pendiente_documento',
+        estudiante_solicitud_at: deps.now().toISOString(),
+        estudiante_listo_at: null,
+        estudiante_correo_alumno_at: null,
+        estudiante_recordatorio_at: null,
+        estudiante_plazo_aviso_at: null,
+        estudiante_decidido_at: null,
+        estudiante_motivo_rechazo: null,
+        estudiante_documento_path: null,
+        estudiante_error: null,
+        monto: 1999,
+        clip_payment_url: null,
+        clip_link_expires_at: null,
+      };
+    }
 
     let fila: Fila;
     if (previa) {
-      if (previa.pago_estado === 'pagado') return json({ ok: true, id: previa.id, ya_pagado: true });
-      const { error } = await db.from('inscripciones').update(datos).eq('id', previa.id);
+      const { data, error } = await db
+        .from('inscripciones')
+        .update({ ...datos, ...extra })
+        .eq('id', previa.id)
+        .select(COLUMNAS)
+        .single();
       if (error) throw error;
-      fila = { ...previa, nombre: datos.nombre, apellidos: datos.apellidos };
+      fila = data as Fila;
     } else {
-      const { data, error } = await db.from('inscripciones').insert(datos).select(COLUMNAS).single();
+      const { data, error } = await db
+        .from('inscripciones')
+        .insert({ ...datos, ...extra })
+        .select(COLUMNAS)
+        .single();
       if (error) throw error;
       fila = data as Fila;
     }
+
+    if (enRevision(fila)) return json(await respuestaEstudiante(fila));
     return json(await respuestaConLink(fila));
+  }
+
+  /** Student request: signed URL so the browser can upload the ID straight to the private bucket. */
+  async function respuestaEstudiante(f: Fila) {
+    const path = `${f.id}/${crypto.randomUUID()}`;
+    const { data, error } = await db.storage.from(BUCKET).createSignedUploadUrl(path);
+    if (error || !data) {
+      console.error('Signed upload URL failed', f.id, error?.message);
+      return { ok: true, id: f.id, estudiante: true, subida: null };
+    }
+    return { ok: true, id: f.id, estudiante: true, subida: { path: data.path, token: data.token } };
+  }
+
+  /** After the optional upload: mark the request ready (the database then calls `estudiantes`). */
+  async function estudianteListo(b: Record<string, unknown>) {
+    const id = texto(b.id, 36);
+    if (!UUID_RE.test(id)) return json({ ok: false, error: 'id' }, 400);
+    const { data, error } = await db
+      .from('inscripciones')
+      .update({ estudiante_listo_at: deps.now().toISOString() })
+      .eq('id', id)
+      .eq('es_estudiante', true)
+      .in('estudiante_estado', [...PENDIENTES])
+      .select('id');
+    if (error) throw error;
+    if (!data?.length) return json({ ok: false, error: 'no_encontrada' }, 404);
+    return json({ ok: true, id });
   }
 
   async function obtenerLink(b: Record<string, unknown>) {
@@ -282,6 +368,7 @@ export function crearHandler(deps: Deps) {
     try {
       if (body.accion === 'link') return await obtenerLink(body);
       if (body.accion === 'estado') return await estado(body);
+      if (body.accion === 'estudiante_listo') return await estudianteListo(body);
       return await registrar(body);
     } catch (e) {
       console.error('inscripcion error', e instanceof Error ? e.message : e);

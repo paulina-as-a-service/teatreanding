@@ -1,10 +1,17 @@
 import { useState, type FormEvent, type ReactNode } from 'react';
 import { AnimatePresence, motion, useAnimationControls } from 'framer-motion';
-import { AlertCircle, ArrowRight, Check, CreditCard, Loader2, Mail, RefreshCw } from 'lucide-react';
+import { AlertCircle, ArrowRight, Check, CreditCard, GraduationCap, Loader2, Mail, Paperclip, RefreshCw, X } from 'lucide-react';
 import { AVISO_VERSION, CURSO } from '../content/curso';
 import { SectionHeading } from '../components/ui';
 import { supabase } from '../lib/supabase';
-import { obtenerLinkPago, registrarInscripcion } from '../lib/inscripcion';
+import {
+  MAX_CREDENCIAL_BYTES,
+  TIPOS_CREDENCIAL,
+  marcarEstudianteListo,
+  obtenerLinkPago,
+  registrarInscripcion,
+  subirCredencial,
+} from '../lib/inscripcion';
 
 type Fields = {
   nombre: string;
@@ -13,6 +20,8 @@ type Fields = {
   email: string;
   aceptaPrivacidad: boolean;
   aceptaComunicaciones: boolean;
+  estudiante: '' | 'si' | 'no';
+  archivo: File | null; // student ID, optional
   empresa: string; // honeypot, must stay empty
 };
 
@@ -25,6 +34,8 @@ const EMPTY: Fields = {
   email: '',
   aceptaPrivacidad: false,
   aceptaComunicaciones: false,
+  estudiante: '',
+  archivo: null,
   empresa: '',
 };
 
@@ -36,6 +47,12 @@ function validate(f: Fields): Errors {
   if (!f.apellidos.trim()) e.apellidos = 'Escribe tus apellidos.';
   if (f.motivo.trim().length < 10) e.motivo = 'Cuéntanos un poco más (mínimo 10 caracteres).';
   if (!EMAIL_RE.test(f.email.trim())) e.email = 'Escribe un correo electrónico válido.';
+  if (!f.estudiante) e.estudiante = 'Indica si eres estudiante.';
+  if (f.estudiante === 'si' && f.archivo) {
+    const tipoOk = TIPOS_CREDENCIAL.includes(f.archivo.type) || /\.(jpe?g|png|webp|heic|heif|pdf)$/i.test(f.archivo.name);
+    if (!tipoOk) e.archivo = 'Sube una foto (JPG, PNG, HEIC) o un PDF.';
+    else if (f.archivo.size > MAX_CREDENCIAL_BYTES) e.archivo = 'El archivo pesa más de 5 MB. Sube una foto más ligera o déjalo vacío.';
+  }
   if (!f.aceptaPrivacidad) e.aceptaPrivacidad = 'Necesitamos tu consentimiento para registrar tu inscripción.';
   return e;
 }
@@ -79,6 +96,8 @@ function Field({
   );
 }
 
+const fmt = (n: number) => `$${n.toLocaleString('es-MX')} ${CURSO.precio.moneda}`;
+
 const Step = ({ n, label, active, done }: { n: number; label: string; active: boolean; done: boolean }) => (
   <li className="flex items-center gap-3">
     <span
@@ -103,6 +122,9 @@ export default function Inscripcion() {
   const [pagoUrl, setPagoUrl] = useState<string | null>(null);
   const [yaPagado, setYaPagado] = useState(false);
   const [reintentando, setReintentando] = useState(false);
+  const [monto, setMonto] = useState<number>(CURSO.precio.monto);
+  // Student-discount request: whether the ID made it to the server (null = not a student request).
+  const [solicitud, setSolicitud] = useState<null | { conCredencial: boolean; subidaFallida: boolean }>(null);
   const shake = useAnimationControls();
 
   const set = <K extends keyof Fields>(k: K, v: Fields[K]) => {
@@ -141,9 +163,31 @@ export default function Inscripcion() {
         aceptaPrivacidad: f.aceptaPrivacidad,
         aceptaComunicaciones: f.aceptaComunicaciones,
         avisoVersion: AVISO_VERSION,
+        esEstudiante: f.estudiante === 'si',
       });
       if (!r.ok || !r.id) throw new Error(r.error ?? 'sin-id');
       setRegistroId(r.id);
+      if (r.estudiante && r.en_revision !== false && !r.payment_url && !r.ya_pagado) {
+        let conCredencial = false;
+        if (f.archivo && r.subida) {
+          try {
+            await subirCredencial(r.subida, f.archivo);
+            conCredencial = true;
+          } catch {
+            /* the email asks them to reply with the ID instead */
+          }
+        }
+        try {
+          await marcarEstudianteListo(r.id);
+        } catch {
+          /* the hourly task closes requests the page could not */
+        }
+        setSolicitud({ conCredencial, subidaFallida: !!f.archivo && !conCredencial });
+        setStatus('done');
+        return;
+      }
+      setSolicitud(null);
+      if (typeof r.monto === 'number') setMonto(r.monto);
       setPagoUrl(r.payment_url ?? null);
       setYaPagado(!!r.ya_pagado);
       setStatus('done');
@@ -160,6 +204,7 @@ export default function Inscripcion() {
       const r = await obtenerLinkPago(registroId);
       setPagoUrl(r.payment_url ?? null);
       setYaPagado(!!r.ya_pagado);
+      if (typeof r.monto === 'number') setMonto(r.monto);
     } catch {
       setPagoUrl(null);
     } finally {
@@ -280,6 +325,124 @@ export default function Inscripcion() {
                   Por favor no incluyas datos sensibles (salud, creencias, etc.).
                 </p>
 
+                <fieldset className="mt-2 rounded-2xl border border-line/10 bg-bg/50 p-4">
+                  <legend className="sr-only">Descuento para estudiantes</legend>
+                  <p id="f-estudiante-pregunta" className="flex items-start gap-2 text-sm font-semibold text-ink">
+                    <GraduationCap size={18} className="mt-0.5 shrink-0 text-accent" aria-hidden />
+                    <span>
+                      ¿Eres estudiante activo de alguna institución académica? <span className="text-highlight">*</span>
+                    </span>
+                  </p>
+                  <div
+                    className="mt-3 flex gap-3"
+                    role="radiogroup"
+                    aria-labelledby="f-estudiante-pregunta"
+                    aria-describedby={errors.estudiante ? 'f-estudiante-error' : undefined}
+                  >
+                    {(['si', 'no'] as const).map((v) => (
+                      <label
+                        key={v}
+                        className={`flex cursor-pointer items-center gap-2 rounded-full border-2 px-5 py-2 text-sm font-semibold transition-colors ${
+                          f.estudiante === v ? 'border-accent bg-accent/10 text-ink' : 'border-line/15 text-text/80 hover:border-accent/50'
+                        }`}
+                      >
+                        <input
+                          id={v === 'si' ? 'f-estudiante' : undefined}
+                          type="radio"
+                          name="estudiante"
+                          value={v}
+                          className="h-4 w-4 accent-[rgb(var(--accent))]"
+                          checked={f.estudiante === v}
+                          onChange={() => set('estudiante', v)}
+                        />
+                        {v === 'si' ? 'Sí' : 'No'}
+                      </label>
+                    ))}
+                  </div>
+                  <AnimatePresence>
+                    {errors.estudiante && (
+                      <motion.p
+                        id="f-estudiante-error"
+                        initial={{ opacity: 0, height: 0 }}
+                        animate={{ opacity: 1, height: 'auto' }}
+                        exit={{ opacity: 0, height: 0 }}
+                        className="mt-2 text-sm font-medium text-[#c0266d] dark:text-[#ff8fc4]"
+                      >
+                        {errors.estudiante}
+                      </motion.p>
+                    )}
+                  </AnimatePresence>
+                  <AnimatePresence initial={false}>
+                    {f.estudiante === 'si' && (
+                      <motion.div
+                        initial={{ opacity: 0, height: 0 }}
+                        animate={{ opacity: 1, height: 'auto' }}
+                        exit={{ opacity: 0, height: 0 }}
+                        className="overflow-hidden"
+                      >
+                        <p className="mt-4 text-sm text-text/85">
+                          Con credencial de estudiante vigente pagas{' '}
+                          <strong className="text-ink">{fmt(CURSO.precio.estudiante)}</strong> en lugar de{' '}
+                          {fmt(CURSO.precio.monto)}. Primero validamos tu credencial y después te enviamos tu link de pago
+                          por correo.
+                        </p>
+                        <div className="mt-3">
+                          <label
+                            htmlFor="f-archivo"
+                            className="flex cursor-pointer items-center gap-3 rounded-2xl border-2 border-dashed border-line/20 px-4 py-3 text-sm text-text hover:border-accent/60"
+                          >
+                            <Paperclip size={18} className="shrink-0 text-accent" aria-hidden />
+                            <span className="min-w-0 flex-1 truncate">
+                              {f.archivo ? f.archivo.name : 'Sube tu credencial vigente (foto o PDF, máximo 5 MB)'}
+                            </span>
+                            {f.archivo && (
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.preventDefault();
+                                  set('archivo', null);
+                                  const input = document.getElementById('f-archivo') as HTMLInputElement | null;
+                                  if (input) input.value = '';
+                                }}
+                                aria-label="Quitar archivo"
+                                className="grid h-7 w-7 shrink-0 place-items-center rounded-full text-text/60 hover:bg-ink/5 hover:text-ink"
+                              >
+                                <X size={16} aria-hidden />
+                              </button>
+                            )}
+                          </label>
+                          <input
+                            id="f-archivo"
+                            type="file"
+                            accept="image/*,application/pdf"
+                            className="sr-only"
+                            onChange={(e) => set('archivo', e.target.files?.[0] ?? null)}
+                            aria-invalid={!!errors.archivo}
+                            aria-describedby={errors.archivo ? 'f-archivo-error' : 'f-archivo-hint'}
+                          />
+                          <AnimatePresence>
+                            {errors.archivo && (
+                              <motion.p
+                                id="f-archivo-error"
+                                initial={{ opacity: 0, height: 0 }}
+                                animate={{ opacity: 1, height: 'auto' }}
+                                exit={{ opacity: 0, height: 0 }}
+                                className="mt-1.5 pl-1 text-sm font-medium text-[#c0266d] dark:text-[#ff8fc4]"
+                              >
+                                {errors.archivo}
+                              </motion.p>
+                            )}
+                          </AnimatePresence>
+                          <p id="f-archivo-hint" className="mt-1.5 pl-1 text-xs text-text/60">
+                            Opcional. Si no la tienes a la mano, déjalo vacío: te enviaremos un correo para que nos la mandes
+                            respondiéndolo. Que se lean tu nombre, la institución y la vigencia.
+                          </p>
+                        </div>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </fieldset>
+
                 {/* Honeypot: hidden from people, visible to bots */}
                 <div className="absolute -left-[9999px] h-px w-px overflow-hidden" aria-hidden>
                   <label htmlFor="f-empresa">Empresa</label>
@@ -356,7 +519,8 @@ export default function Inscripcion() {
                     </>
                   ) : (
                     <>
-                      Continuar al pago <ArrowRight size={18} aria-hidden />
+                      {f.estudiante === 'si' ? 'Solicitar descuento de estudiante' : 'Continuar al pago'}{' '}
+                      <ArrowRight size={18} aria-hidden />
                     </>
                   )}
                 </button>
@@ -379,7 +543,28 @@ export default function Inscripcion() {
                   <Check size={30} aria-hidden />
                 </motion.span>
                 <h3 className="mt-6 text-2xl font-bold text-ink">¡Gracias, {f.nombre.trim().split(' ')[0] || 'ya casi'}!</h3>
-                {yaPagado ? (
+                {solicitud ? (
+                  <div className="mx-auto mt-2 max-w-md space-y-3 text-text/85">
+                    {solicitud.conCredencial ? (
+                      <p>
+                        Recibimos tu credencial. La vamos a revisar y te escribimos a{' '}
+                        <strong className="text-ink">{f.email.trim()}</strong> con el resultado.
+                      </p>
+                    ) : (
+                      <p>
+                        {solicitud.subidaFallida ? 'No pudimos subir tu credencial, pero tu solicitud quedó registrada. ' : ''}
+                        Te enviamos un correo a <strong className="text-ink">{f.email.trim()}</strong>. Respóndelo con una
+                        foto o PDF de tu credencial de estudiante vigente en las próximas 72 horas.
+                      </p>
+                    )}
+                    <p>
+                      Si queda validada, te mandamos tu link de pago por{' '}
+                      <strong className="text-ink">{fmt(CURSO.precio.estudiante)}</strong>. Tu lugar queda apartado cuando
+                      se confirma el pago.
+                    </p>
+                    <p className="text-sm text-text/70">Si no ves el correo, revisa tu carpeta de spam o promociones.</p>
+                  </div>
+                ) : yaPagado ? (
                   <p className="mx-auto mt-2 max-w-md text-text/85">
                     Ya tenemos registrado un pago con este correo, así que no necesitas pagar de nuevo. Si quieres
                     inscribir a otra persona, usa su propio correo.
@@ -388,9 +573,7 @@ export default function Inscripcion() {
                   <>
                     <p className="mx-auto mt-2 max-w-md text-text/85">
                       Recibimos tus datos. Para completar tu inscripción, realiza el pago de{' '}
-                      <strong className="text-ink">
-                        ${CURSO.precio.monto.toLocaleString('es-MX')} {CURSO.precio.moneda}
-                      </strong>{' '}
+                      <strong className="text-ink">{fmt(monto)}</strong>{' '}
                       en la página segura de Clip. Al terminar volverás a esta página.
                     </p>
                     <a href={pagoUrl} className="btn-primary mt-8 !px-8 !py-4 !text-lg">

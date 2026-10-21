@@ -12,3 +12,7 @@ verify_jwt = false
 # Called by the database (pg_net) with ?token=, not with a Supabase token.
 [functions.confirmacion-email]
 verify_jwt = false
+
+# Called by the database (pg_net, ?token=) and by the review page (signed link in the body).
+[functions.estudiantes]
+verify_jwt = false

@@ -7,7 +7,10 @@
  *
  * Setup (once):
  *   1. Paste this file into the Apps Script editor and save.
- *   2. Run `configurar` and authorize. It creates the header row and logs the secret token.
+ *   2. Run `configurar` and authorize. It writes the header row and logs the secret token.
+ *      After updating this script, run `configurar` again (it rewrites the headers) and publish a new
+ *      version of the existing deployment (Deploy > Manage deployments > edit > New version) so the URL
+ *      saved in Supabase keeps working.
  *   3. Deploy > New deployment > Web app. Execute as: Me. Who has access: Anyone.
  *   4. Final URL for Supabase = <Web app URL> + "?token=" + <token from step 2>.
  *
@@ -17,12 +20,22 @@
 
 const NOMBRE_HOJA = 'Inscripciones';
 const ZONA = 'America/Mexico_City';
-const ENCABEZADOS = ['ID', 'Fecha de registro', 'Nombre', 'Apellidos', 'Correo', 'Estado de pago', 'Fecha de pago'];
+const ENCABEZADOS = [
+  'ID', 'Fecha de registro', 'Nombre', 'Apellidos', 'Correo', 'Estado de pago', 'Fecha de pago',
+  'Estudiante', 'Descuento estudiante', 'Monto',
+];
 const ESTADOS = { pendiente: 'Pendiente', pagado: 'Pagado', cancelado: 'Cancelado' };
+const ESTADOS_ESTUDIANTE = {
+  pendiente_documento: 'Esperando credencial',
+  en_revision: 'En revisión',
+  validado: 'Aprobado',
+  rechazado: 'Rechazado',
+};
 
 /** Run once from the editor: creates the sheet/headers and the secret token. */
 function configurar() {
   const hoja = obtenerHoja_();
+  escribirEncabezados_(hoja);
   const props = PropertiesService.getScriptProperties();
   let token = props.getProperty('WEBHOOK_TOKEN');
   if (!token) {
@@ -60,6 +73,9 @@ function doPost(e) {
       texto_(r.email),
       ESTADOS[r.pago_estado] || texto_(r.pago_estado),
       fecha_(r.pagado_at),
+      r.es_estudiante ? 'Sí' : 'No',
+      ESTADOS_ESTUDIANTE[r.estudiante_estado] || texto_(r.estudiante_estado),
+      r.monto == null ? '' : Number(r.monto),
     ];
     const ultima = hoja.getLastRow();
     let indice = -1;
@@ -82,12 +98,13 @@ function obtenerHoja_() {
   const libro = SpreadsheetApp.getActiveSpreadsheet();
   let hoja = libro.getSheetByName(NOMBRE_HOJA);
   if (!hoja) hoja = libro.insertSheet(NOMBRE_HOJA);
-  if (hoja.getLastRow() === 0) {
-    hoja.appendRow(ENCABEZADOS);
-    hoja.setFrozenRows(1);
-    hoja.getRange(1, 1, 1, ENCABEZADOS.length).setFontWeight('bold');
-  }
+  if (hoja.getLastRow() === 0) escribirEncabezados_(hoja);
   return hoja;
+}
+
+function escribirEncabezados_(hoja) {
+  hoja.getRange(1, 1, 1, ENCABEZADOS.length).setValues([ENCABEZADOS]).setFontWeight('bold');
+  hoja.setFrozenRows(1);
 }
 
 /** ISO timestamp from Postgres -> "2026-11-14 10:00" in CDMX time. Empty if missing. */

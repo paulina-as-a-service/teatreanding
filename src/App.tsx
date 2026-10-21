@@ -11,9 +11,16 @@ import Inscripcion from './sections/Inscripcion';
 import AvisoPrivacidad from './sections/AvisoPrivacidad';
 import Footer from './sections/Footer';
 import PagoRetorno from './components/PagoRetorno';
+import PagarDirecto from './components/PagarDirecto';
+import RevisionEstudiante from './components/RevisionEstudiante';
+
+/** Student-discount review page for Mauricio (link from his notification email). */
+const esRevision = () => new URLSearchParams(window.location.search).has('revision');
 
 export default function App() {
   const { theme, setTheme } = useTheme();
+
+  if (esRevision()) return <RevisionEstudiante />;
 
   return (
     // Respect the visitor's reduced-motion setting across all Framer Motion animations
@@ -38,6 +45,7 @@ export default function App() {
       </main>
       <Footer />
       <PagoRetorno />
+      <PagarDirecto />
     </MotionConfig>
   );
 }

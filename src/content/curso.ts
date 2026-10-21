@@ -30,10 +30,13 @@ export const CURSO = {
   modalidad: 'En línea por Zoom',
   duracionHoras: 20,
   precio: {
-    // Debe coincidir con el secreto CLIP_MONTO de la Edge Function (el monto que Clip cobra).
+    // Precio regular. Clip cobra el `monto` de cada inscripción (1999 por defecto en la base de datos).
     monto: 1999,
     moneda: 'MXN',
     nota: 'Pago único',
+    // 25% de descuento para estudiantes con credencial vigente (lo valida Mauricio Baylón).
+    // Debe coincidir con MONTO_ESTUDIANTE en supabase/functions/estudiantes/index.ts.
+    estudiante: 1499,
   },
   // Confirmado por la usuaria (16 oct 2026): reconocimiento por 20 horas, solo con 100% de asistencia (la registra Mauricio Baylón).
   reconocimiento: {
@@ -188,4 +191,4 @@ export const TESTIMONIOS: { texto: string; programa: string }[] = [
 ];
 
 /** Versión del aviso de privacidad vigente; se guarda con cada registro. */
-export const AVISO_VERSION = '2026-10-16';
+export const AVISO_VERSION = '2026-10-21';

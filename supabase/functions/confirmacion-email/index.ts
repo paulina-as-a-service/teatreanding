@@ -15,7 +15,7 @@
  *   CONFIRMACION_TOKEN      random string; the same value goes in the Vault URL (?token=...)
  *   RESEND_FROM             optional, default "Teatranding! <inscripciones@teatranding.com>"
  *   RESEND_REPLY_TO         optional, default "teatranding@gmail.com"
- *   ZOOM_URL                optional; if set, the email includes the Zoom link
+ *   ZOOM_URL                required; Zoom link with passcode (if missing, the row is marked 'error')
  * Provided automatically: SUPABASE_URL and the service key (legacy or new format).
  *
  * Deploy with JWT verification OFF (the database call uses ?token= instead).
@@ -44,44 +44,70 @@ const COLUMNAS =
   'id,nombre,email,pago_estado,confirmacion_estado,confirmacion_intentos,confirmacion_actualizado_at';
 
 /* ------------------------------------------------------------------------------------------
- * PLANTILLA DEL CORREO
- * BORRADOR: reemplazar con el texto final. Variables disponibles: nombre, zoomUrl (o null).
+ * PLANTILLA DEL CORREO (texto final, 20 oct 2026)
+ * Variables: nombre (de la inscripción) y zoomUrl (secreto ZOOM_URL).
+ * Si cambia la reunión de Zoom, actualiza ZOOM_URL y también ZOOM_ID / ZOOM_CODIGO aquí abajo.
  * ---------------------------------------------------------------------------------------- */
-export const ASUNTO = 'Tu lugar está apartado: Introducción a la Producción Creativa';
+export const ASUNTO = 'Teatranding: ¡Tu lugar ha sido apartado!';
 
-export function cuerpoTexto(nombre: string, zoomUrl: string | null): string {
+const CURSO_NOMBRE = 'Introducción a la producción creativa para eventos y entretenimiento';
+const ZOOM_ID = '879 9365 9845';
+const ZOOM_CODIGO = '3UUxQi';
+const CONTACTO_EMAIL = 'teatranding@gmail.com';
+const INSTAGRAM = 'teatranding.mx';
+
+const DETALLES: [string, string][] = [
+  ['Curso', CURSO_NOMBRE],
+  ['Imparte', 'Mauricio Baylón'],
+  ['Fecha de inicio', 'Sábado 14 de noviembre'],
+  ['Periodo', 'Sábados del 14 de noviembre al 12 de diciembre'],
+  ['Horario', '10:00 a 14:00 hrs (Hora de la Ciudad de México / CDMX)'],
+  ['Modalidad', 'Online en vivo vía Zoom'],
+];
+
+export function cuerpoTexto(nombre: string, zoomUrl: string): string {
   return [
-    `Hola, ${nombre}:`,
+    `¡Muchas gracias por tu compra, ${nombre}! Tu pago ha sido recibido con éxito 🎉`,
+    `¡Te damos la más cordial bienvenida a ${CURSO_NOMBRE}! Tu lugar ya está completamente asegurado.`,
     '',
-    'Tu pago quedó registrado y tu lugar en el curso Introducción a la Producción Creativa para eventos y entretenimiento está apartado.',
+    '📌 Detalles del curso',
+    ...DETALLES.map(([k, v]) => `${k}: ${v}`),
     '',
-    'Sábados del 14 de noviembre al 12 de diciembre, de 10:00 a 14:00 h (hora de la Ciudad de México), por Zoom.',
+    'Podrás unirte a todas las sesiones a través del siguiente enlace:',
+    `🔗 ${zoomUrl}`,
+    `ID de reunión: ${ZOOM_ID}`,
+    `Código de acceso: ${ZOOM_CODIGO}`,
+    '(Te sugerimos guardar este enlace en tu calendario y conectarte 5 minutos antes del inicio).',
     '',
-    zoomUrl
-      ? `Liga de Zoom: ${zoomUrl}`
-      : 'Antes de la primera sesión te enviaremos la liga de Zoom a este correo.',
+    '¿Tienes alguna duda?',
+    `Si necesitas ayuda o tienes preguntas antes de comenzar, escríbenos a ${CONTACTO_EMAIL} o por Instagram en @${INSTAGRAM}.`,
     '',
-    'Si tienes dudas, responde a este correo.',
-    '',
-    'Teatranding!',
+    '¡Nos vemos el 14 de noviembre para comenzar a crear!',
   ].join('\n');
 }
 
-export function cuerpoHtml(nombre: string, zoomUrl: string | null): string {
+export function cuerpoHtml(nombre: string, zoomUrl: string): string {
   const n = escapar(nombre);
-  const zoom = zoomUrl
-    ? `<p><strong>Liga de Zoom:</strong> <a href="${escapar(zoomUrl)}">${escapar(zoomUrl)}</a></p>`
-    : '<p>Antes de la primera sesión te enviaremos la liga de Zoom a este correo.</p>';
+  const z = escapar(zoomUrl);
+  const filas = DETALLES.map(
+    ([k, v]) =>
+      `<tr><td style="padding:4px 12px 4px 0;color:#5b5480;white-space:nowrap;vertical-align:top;">${k}</td><td style="padding:4px 0;">${escapar(v)}</td></tr>`
+  ).join('');
   return `<!doctype html>
 <html lang="es">
 <body style="margin:0;padding:24px;background:#f4f2fb;font-family:Arial,Helvetica,sans-serif;color:#1d1a3a;">
-  <div style="max-width:560px;margin:0 auto;background:#ffffff;border-radius:12px;padding:32px;line-height:1.55;">
-    <p>Hola, ${n}:</p>
-    <p>Tu pago quedó registrado y tu lugar en el curso <strong>Introducción a la Producción Creativa para eventos y entretenimiento</strong> está apartado.</p>
-    <p>Sábados del 14 de noviembre al 12 de diciembre, de 10:00 a 14:00 h (hora de la Ciudad de México), por Zoom.</p>
-    ${zoom}
-    <p>Si tienes dudas, responde a este correo.</p>
-    <p style="margin-top:28px;">Teatranding!</p>
+  <div style="max-width:560px;margin:0 auto;background:#ffffff;border-radius:12px;padding:32px;line-height:1.55;font-size:15px;">
+    <p style="margin-top:0;"><strong>¡Muchas gracias por tu compra, ${n}!</strong> Tu pago ha sido recibido con éxito 🎉</p>
+    <p>¡Te damos la más cordial bienvenida a <strong>${CURSO_NOMBRE}</strong>! Tu lugar ya está completamente asegurado.</p>
+    <h2 style="font-size:17px;margin:28px 0 8px;">📌 Detalles del curso</h2>
+    <table role="presentation" style="border-collapse:collapse;font-size:15px;">${filas}</table>
+    <p style="margin-top:24px;">Podrás unirte a todas las sesiones a través del siguiente enlace:</p>
+    <p style="margin:0 0 8px;">🔗 <a href="${z}" style="color:#3b2fc9;font-weight:bold;">${z}</a></p>
+    <p style="margin:0;">ID de reunión: <strong>${ZOOM_ID}</strong><br>Código de acceso: <strong>${ZOOM_CODIGO}</strong></p>
+    <p style="color:#5b5480;font-size:14px;">(Te sugerimos guardar este enlace en tu calendario y conectarte 5 minutos antes del inicio).</p>
+    <h2 style="font-size:17px;margin:28px 0 8px;">¿Tienes alguna duda?</h2>
+    <p style="margin-top:0;">Si necesitas ayuda o tienes preguntas antes de comenzar, escríbenos a <a href="mailto:${CONTACTO_EMAIL}" style="color:#3b2fc9;">${CONTACTO_EMAIL}</a> o por Instagram en <a href="https://www.instagram.com/${INSTAGRAM}/" style="color:#3b2fc9;">@${INSTAGRAM}</a>.</p>
+    <p style="margin-top:28px;font-weight:bold;">¡Nos vemos el 14 de noviembre para comenzar a crear!</p>
   </div>
 </body>
 </html>`;
@@ -171,8 +197,13 @@ export function crearHandler(deps: Deps) {
     if (errReclamo) return json({ ok: false, error: 'db' }, 500);
     if (!reclamada?.length) return json({ ok: true, omitido: true, motivo: 'en_curso' });
 
-    const nombre = (fila.nombre ?? '').trim() || 'hola';
-    const zoomUrl = env.get('ZOOM_URL')?.trim() || null;
+    const nombre = (fila.nombre ?? '').trim();
+    const zoomUrl = env.get('ZOOM_URL')?.trim() ?? '';
+    if (!zoomUrl) {
+      // Never send the confirmation without the Zoom link. Set ZOOM_URL, then mark 'reintentar'.
+      await marcar(id, { confirmacion_estado: 'error', confirmacion_error: 'Falta el secreto ZOOM_URL' });
+      return json({ ok: false, error: 'config_zoom' }, 500);
+    }
 
     let res: Response;
     try {

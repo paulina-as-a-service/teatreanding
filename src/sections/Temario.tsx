@@ -1,9 +1,20 @@
 import { useRef, useState } from 'react';
 import { AnimatePresence, motion, useScroll, useTransform } from 'framer-motion';
-import { Plus, Sparkles } from 'lucide-react';
+import type { MouseEvent } from 'react';
+import { Calculator, ChartGantt, ClipboardList, Compass, Headset, MapPinned, Plus, type LucideIcon } from 'lucide-react';
 import { APRENDIZAJES, MODULOS } from '../content/curso';
 import { Copy, SectionHeading } from '../components/ui';
 import { fadeUp, stagger } from '../components/motion';
+
+/** Un ícono por tarjeta de "Lo que vas a aprender", en el mismo orden que APRENDIZAJES. */
+const ICONOS_APRENDIZAJE: LucideIcon[] = [Compass, ChartGantt, Calculator, ClipboardList, MapPinned, Headset];
+
+/** Guarda la posición del cursor en la tarjeta para el brillo radial. */
+function seguirCursor(e: MouseEvent<HTMLElement>) {
+  const r = e.currentTarget.getBoundingClientRect();
+  e.currentTarget.style.setProperty('--mx', `${e.clientX - r.left}px`);
+  e.currentTarget.style.setProperty('--my', `${e.clientY - r.top}px`);
+}
 
 export default function Temario() {
   const [open, setOpen] = useState(0);
@@ -134,20 +145,41 @@ export default function Temario() {
             viewport={{ once: true, margin: '0px 0px -10% 0px' }}
             variants={stagger(0.07)}
           >
-            {APRENDIZAJES.map((a) => (
-              <motion.li
-                key={a.titulo}
-                variants={fadeUp}
-                className="card group relative overflow-hidden p-6 transition-transform duration-500 hover:-translate-y-1"
-              >
-                <span className="absolute inset-x-0 top-0 h-1 origin-left scale-x-0 bg-gradient-to-r from-brand-violet via-brand-orchid to-brand-magenta transition-transform duration-500 group-hover:scale-x-100" />
-                <Sparkles size={20} className="text-highlight" aria-hidden />
-                <h3 className="mt-4 text-lg font-bold leading-snug text-ink">{a.titulo}</h3>
-                <p className="mt-2 text-sm text-text/85">
-                  <Copy text={a.texto} />
-                </p>
-              </motion.li>
-            ))}
+            {APRENDIZAJES.map((a, i) => {
+              const Icono = ICONOS_APRENDIZAJE[i] ?? Compass;
+              return (
+                <motion.li
+                  key={a.titulo}
+                  variants={fadeUp}
+                  onMouseMove={seguirCursor}
+                  className="card group relative isolate overflow-hidden p-6 transition-[transform,box-shadow] duration-500 hover:-translate-y-1 hover:shadow-[0_30px_60px_-25px_rgba(92,75,216,0.6)]"
+                >
+                  {/* Degradado de marca que aparece al pasar el cursor */}
+                  <span
+                    className="absolute inset-0 -z-10 bg-gradient-to-br from-brand-indigo via-brand-violet to-brand-plum opacity-0 transition-opacity duration-500 ease-out group-hover:opacity-100"
+                    aria-hidden
+                  />
+                  {/* Brillo que sigue al cursor */}
+                  <span
+                    className="absolute inset-0 -z-10 opacity-0 transition-opacity duration-500 group-hover:opacity-100"
+                    style={{
+                      background:
+                        'radial-gradient(260px circle at var(--mx, 50%) var(--my, 50%), rgba(191,119,210,0.55), rgba(170,50,119,0.25) 45%, transparent 70%)',
+                    }}
+                    aria-hidden
+                  />
+                  <span className="grid h-11 w-11 place-items-center rounded-2xl bg-gradient-to-br from-brand-violet to-brand-plum text-white shadow-lg shadow-brand-violet/30 ring-1 ring-white/0 transition-all duration-500 group-hover:bg-none group-hover:bg-white/15 group-hover:shadow-none group-hover:ring-white/30">
+                    <Icono size={20} strokeWidth={2} aria-hidden />
+                  </span>
+                  <h3 className="mt-4 text-lg font-bold leading-snug text-ink transition-colors duration-500 group-hover:text-white">
+                    {a.titulo}
+                  </h3>
+                  <p className="mt-2 text-sm text-text/85 transition-colors duration-500 group-hover:text-white/90">
+                    <Copy text={a.texto} />
+                  </p>
+                </motion.li>
+              );
+            })}
           </motion.ul>
         </div>
       </div>

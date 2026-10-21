@@ -1,9 +1,10 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { AnimatePresence, motion, useScroll, useTransform } from 'framer-motion';
 import type { MouseEvent } from 'react';
 import { Calculator, ChartGantt, ClipboardList, Compass, Headset, MapPinned, Plus, type LucideIcon } from 'lucide-react';
 import { APRENDIZAJES, MODULOS } from '../content/curso';
 import { Copy, SectionHeading } from '../components/ui';
+import { useMediaQuery } from '../hooks/useMediaQuery';
 import { fadeUp, stagger } from '../components/motion';
 
 /** Un ícono por tarjeta de "Lo que vas a aprender", en el mismo orden que APRENDIZAJES. */
@@ -16,7 +17,56 @@ function seguirCursor(e: MouseEvent<HTMLElement>) {
   e.currentTarget.style.setProperty('--my', `${e.clientY - r.top}px`);
 }
 
+/**
+ * En pantallas táctiles (sin cursor) el degradado se activa con el scroll:
+ * se ilumina la tarjeta más cercana al centro de la pantalla, una a la vez.
+ */
+function useTarjetaActivaPorScroll(activo: boolean, total: number) {
+  const refs = useRef<(HTMLLIElement | null)[]>([]);
+  const [indice, setIndice] = useState(-1);
+
+  useEffect(() => {
+    if (!activo) {
+      setIndice(-1);
+      return;
+    }
+    let frame = 0;
+    const medir = () => {
+      frame = 0;
+      const centro = window.innerHeight / 2;
+      const margen = window.innerHeight * 0.35;
+      let mejor = -1;
+      let menor = Infinity;
+      refs.current.slice(0, total).forEach((el, i) => {
+        if (!el) return;
+        const r = el.getBoundingClientRect();
+        const distancia = Math.abs(r.top + r.height / 2 - centro);
+        if (distancia < menor && distancia < margen + r.height / 2) {
+          menor = distancia;
+          mejor = i;
+        }
+      });
+      setIndice(mejor);
+    };
+    const programar = () => {
+      if (!frame) frame = requestAnimationFrame(medir);
+    };
+    medir();
+    window.addEventListener('scroll', programar, { passive: true });
+    window.addEventListener('resize', programar);
+    return () => {
+      window.removeEventListener('scroll', programar);
+      window.removeEventListener('resize', programar);
+      if (frame) cancelAnimationFrame(frame);
+    };
+  }, [activo, total]);
+
+  return { refs, indice };
+}
+
 export default function Temario() {
+  const esTactil = useMediaQuery('(hover: none)');
+  const { refs: tarjetasRefs, indice: tarjetaActiva } = useTarjetaActivaPorScroll(esTactil, APRENDIZAJES.length);
   const [open, setOpen] = useState(0);
   const ref = useRef<HTMLElement>(null);
   const { scrollYProgress } = useScroll({ target: ref, offset: ['start end', 'end start'] });
@@ -150,31 +200,35 @@ export default function Temario() {
               return (
                 <motion.li
                   key={a.titulo}
+                  ref={(el) => {
+                    tarjetasRefs.current[i] = el;
+                  }}
                   variants={fadeUp}
                   onMouseMove={seguirCursor}
-                  className="card group relative isolate overflow-hidden p-6 transition-[transform,box-shadow] duration-500 hover:-translate-y-1 hover:shadow-[0_30px_60px_-25px_rgba(92,75,216,0.6)]"
+                  data-activa={tarjetaActiva === i}
+                  className="card group relative isolate overflow-hidden p-6 transition-[transform,box-shadow] duration-500 data-[activa=true]:-translate-y-1 data-[activa=true]:shadow-[0_30px_60px_-25px_rgba(92,75,216,0.6)] [@media(hover:hover)]:hover:-translate-y-1 [@media(hover:hover)]:hover:shadow-[0_30px_60px_-25px_rgba(92,75,216,0.6)]"
                 >
-                  {/* Degradado de marca que aparece al pasar el cursor */}
+                  {/* Degradado de marca: con cursor al pasar encima; en táctil, al quedar al centro con el scroll */}
                   <span
-                    className="absolute inset-0 -z-10 bg-gradient-to-br from-brand-indigo via-brand-violet to-brand-plum opacity-0 transition-opacity duration-500 ease-out group-hover:opacity-100"
+                    className="absolute inset-0 -z-10 bg-gradient-to-br from-brand-indigo via-brand-violet to-brand-plum opacity-0 transition-opacity duration-500 ease-out group-data-[activa=true]:opacity-100 [@media(hover:hover)]:group-hover:opacity-100"
                     aria-hidden
                   />
                   {/* Brillo que sigue al cursor */}
                   <span
-                    className="absolute inset-0 -z-10 opacity-0 transition-opacity duration-500 group-hover:opacity-100"
+                    className="absolute inset-0 -z-10 opacity-0 transition-opacity duration-500 group-data-[activa=true]:opacity-100 [@media(hover:hover)]:group-hover:opacity-100"
                     style={{
                       background:
                         'radial-gradient(260px circle at var(--mx, 50%) var(--my, 50%), rgba(191,119,210,0.55), rgba(170,50,119,0.25) 45%, transparent 70%)',
                     }}
                     aria-hidden
                   />
-                  <span className="grid h-11 w-11 place-items-center rounded-2xl bg-gradient-to-br from-brand-violet to-brand-plum text-white shadow-lg shadow-brand-violet/30 ring-1 ring-white/0 transition-all duration-500 group-hover:bg-none group-hover:bg-white/15 group-hover:shadow-none group-hover:ring-white/30">
+                  <span className="grid h-11 w-11 place-items-center rounded-2xl bg-gradient-to-br from-brand-violet to-brand-plum text-white shadow-lg shadow-brand-violet/30 ring-1 ring-white/0 transition-all duration-500 group-data-[activa=true]:bg-none [@media(hover:hover)]:group-hover:bg-none group-data-[activa=true]:bg-white/15 [@media(hover:hover)]:group-hover:bg-white/15 group-data-[activa=true]:shadow-none [@media(hover:hover)]:group-hover:shadow-none group-data-[activa=true]:ring-white/30 [@media(hover:hover)]:group-hover:ring-white/30">
                     <Icono size={20} strokeWidth={2} aria-hidden />
                   </span>
-                  <h3 className="mt-4 text-lg font-bold leading-snug text-ink transition-colors duration-500 group-hover:text-white">
+                  <h3 className="mt-4 text-lg font-bold leading-snug text-ink transition-colors duration-500 group-data-[activa=true]:text-white [@media(hover:hover)]:group-hover:text-white">
                     {a.titulo}
                   </h3>
-                  <p className="mt-2 text-sm text-text/85 transition-colors duration-500 group-hover:text-white/90">
+                  <p className="mt-2 text-sm text-text/85 transition-colors duration-500 group-data-[activa=true]:text-white/90 [@media(hover:hover)]:group-hover:text-white/90">
                     <Copy text={a.texto} />
                   </p>
                 </motion.li>

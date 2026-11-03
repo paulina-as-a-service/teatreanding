@@ -25,8 +25,8 @@
  *   { accion: 'revision_decidir', clave, decision: 'aprobar' | 'rechazar', motivo? }
  *     Saves the decision once (a second click shows the decision already made), deletes the ID from
  *     Storage, and emails the student:
- *       aprobar:  monto = 1499 and a link to pay it,
- *       rechazar: monto = 1999, the reason (from MOTIVOS) and a link to pay the regular price.
+ *       aprobar:  monto = 1499 and a link to pay it (in full, or $500 + 2 installments),
+ *       rechazar: monto = 1999, the reason (from MOTIVOS) and a link to pay the regular price (same two options).
  *     The payment link is SITE_URL/?pagar=<id>: the site asks `inscripcion` for a fresh Clip link
  *     with the registration's `monto`, so it never expires and Clip's webhook recognizes the payment.
  *
@@ -125,7 +125,14 @@ export const MOTIVOS: Record<string, { etiqueta: string; texto: string }> = {
 type Correo = { asunto: string; html: string; texto: string };
 type Boton = { texto: string; url: string; secundario?: boolean };
 
-const pesos = (n: number) => `$${n.toLocaleString('es-MX')} MXN`;
+const pesos = (n: number) =>
+  `$${n.toLocaleString('es-MX', { minimumFractionDigits: Number.isInteger(n) ? 0 : 2, maximumFractionDigits: 2 })} MXN`;
+
+/** Installments: $500 to reserve, the rest in two equal payments (same split as `inscripcion`). */
+const APARTADO = 500;
+const cuota = (total: number) => Math.round(((total - APARTADO) / 2) * 100) / 100;
+const opcionesPago = (total: number) =>
+  `Puedes pagar ${pesos(total)} en una sola exhibición, o apartar tu lugar con **${pesos(APARTADO)}** y liquidar el resto en 2 pagos de ${pesos(cuota(total))} (14 y 30 de noviembre), sin intereses.`;
 
 function escapar(s: string): string {
   return s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!);
@@ -186,7 +193,7 @@ export const correos = {
     armar('Recibimos tu credencial de estudiante', logo, [
       `Hola, ${primerNombre(f)}:`,
       'Recibimos tu solicitud de descuento para estudiantes y tu credencial. La vamos a revisar y te escribimos a este correo con el resultado.',
-      `Si queda validada, te mandamos tu link de pago por **${pesos(MONTO_ESTUDIANTE)}** (precio regular ${pesos(MONTO_REGULAR)}). Tu lugar queda apartado cuando se confirma el pago.`,
+      `Si queda validada, te mandamos tu link de pago con precio de estudiante: **${pesos(MONTO_ESTUDIANTE)}** (precio regular ${pesos(MONTO_REGULAR)}). Tu lugar queda apartado cuando se confirma tu primer pago.`,
       'Si tienes alguna duda, responde este correo.',
     ]),
 
@@ -195,7 +202,7 @@ export const correos = {
       `Hola, ${primerNombre(f)}:`,
       'Recibimos tu solicitud de descuento para estudiantes. Para validarla, **responde este correo con una foto o PDF de tu credencial de estudiante vigente**, donde se lean tu nombre, la institución y la vigencia.',
       `Tienes hasta el **${fechaLarga(limite)}** para enviarla.`,
-      `Cuando la validemos, te mandamos tu link de pago por **${pesos(MONTO_ESTUDIANTE)}** (precio regular ${pesos(MONTO_REGULAR)}).`,
+      `Cuando la validemos, te mandamos tu link de pago con precio de estudiante: **${pesos(MONTO_ESTUDIANTE)}** (precio regular ${pesos(MONTO_REGULAR)}).`,
     ]),
 
   alumnoRecordatorio: (f: Fila, limite: Date, logo: string | null) =>
@@ -209,8 +216,9 @@ export const correos = {
     armar('Tu descuento de estudiante está aprobado', logo, [
       `Hola, ${primerNombre(f)}:`,
       `Validamos tu credencial. Tu precio para el curso es de **${pesos(MONTO_ESTUDIANTE)}**.`,
-      'Para apartar tu lugar, completa el pago en el siguiente enlace. En cuanto se confirme, te llega un correo con el enlace de Zoom y los detalles de las sesiones.',
-    ], [{ texto: `Pagar ${pesos(MONTO_ESTUDIANTE)}`, url: pagoUrl }]),
+      opcionesPago(MONTO_ESTUDIANTE),
+      'Elige cómo pagar en el siguiente enlace. El enlace de Zoom te llega al confirmarse tu pago completo o, si pagas en parcialidades, tu segundo pago.',
+    ], [{ texto: 'Elegir cómo pagar', url: pagoUrl }]),
 
   alumnoRechazado: (f: Fila, motivo: string, pagoUrl: string, logo: string | null) =>
     armar('Sobre tu solicitud de descuento para estudiantes', logo, [
@@ -218,8 +226,8 @@ export const correos = {
       'Revisamos tu solicitud y no pudimos aplicar el descuento para estudiantes.',
       `**Motivo:** ${motivo}`,
       'Si tienes una credencial vigente, puedes volver a solicitar el descuento desde el formulario en teatranding.com con este mismo correo.',
-      `También puedes inscribirte al precio regular de ${pesos(MONTO_REGULAR)}:`,
-    ], [{ texto: `Pagar ${pesos(MONTO_REGULAR)}`, url: pagoUrl }], ['Si tienes alguna duda, responde este correo.']),
+      `También puedes inscribirte al precio regular de ${pesos(MONTO_REGULAR)}. ${opcionesPago(MONTO_REGULAR)}`,
+    ], [{ texto: 'Elegir cómo pagar', url: pagoUrl }], ['Si tienes alguna duda, responde este correo.']),
 
   revision: (f: Fila, conDocumento: boolean, nuevoDocumento: boolean, aprobar: string, rechazar: string, logo: string | null) =>
     armar(
@@ -546,7 +554,7 @@ export function crearHandler(deps: Deps) {
       apellidos: f.apellidos,
       email: f.email,
       estado: f.estudiante_estado,
-      pagado: f.pago_estado === 'pagado',
+      pagado: f.pago_estado === 'pagado' || f.pago_estado === 'parcial',
       solicitud_at: f.estudiante_solicitud_at,
       decidido_at: f.estudiante_decidido_at,
       motivo: f.estudiante_motivo_rechazo ? MOTIVOS[f.estudiante_motivo_rechazo]?.etiqueta ?? f.estudiante_motivo_rechazo : null,
@@ -565,7 +573,7 @@ export function crearHandler(deps: Deps) {
 
     const f = await leer(id);
     if (!f || !f.es_estudiante) return json({ ok: false, error: 'no_encontrada' }, 404);
-    if (f.pago_estado === 'pagado') return json({ ok: false, error: 'ya_pagado' }, 409);
+    if (f.pago_estado === 'pagado' || f.pago_estado === 'parcial') return json({ ok: false, error: 'ya_pagado' }, 409);
     if (!PENDIENTES.includes(f.estudiante_estado ?? '')) {
       return json({ ok: true, ya_decidido: true, estado: f.estudiante_estado });
     }
@@ -582,6 +590,7 @@ export function crearHandler(deps: Deps) {
         // Any earlier link was for a different amount; the next one is created with the new `monto`.
         clip_payment_url: null,
         clip_link_expires_at: null,
+        clip_link_concepto: null,
       })
       .eq('id', id)
       .in('estudiante_estado', PENDIENTES)

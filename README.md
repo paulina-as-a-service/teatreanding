@@ -66,8 +66,9 @@ Piezas:
 - La URL del web app (con su token) se guarda en Supabase Vault con el nombre `sheets_webhook_url`.
   Nunca va en el repo.
 
-Para marcar un pago (por ahora, manual): en el Table Editor de Supabase cambia `pago_estado` a
-`pagado` y llena `pagado_at`. La hoja se actualiza sola.
+Para registrar un pago manual (transferencia, efectivo): en el Table Editor agrega una fila en `pagos`
+(`inscripcion_id`, `concepto`, `monto`, `pagado_at`; deja vacío `clip_payment_request_id`). La base de datos
+recalcula `pago_estado` y la hoja se actualiza sola. Ya no cambies `pago_estado` a mano: se calcula de `pagos`.
 
 Diagnóstico: `select id, status_code, created from net._http_response order by created desc limit 10;`
 Un 302 o 200 indica que Google recibió el registro.
@@ -101,8 +102,9 @@ Secretos de las Edge Functions:
 | `CLIP_WEBHOOK_TOKEN` | Texto aleatorio (solo letras y números, 32+ caracteres) |
 | `SITE_URL` | `https://teatranding.com` (cuando el dominio ya cargue el sitio; antes `https://teatranding.bolt.host`) |
 
-El monto que cobra Clip es la columna `monto` de cada inscripción (1999 por defecto; 1499 cuando se
-aprueba un descuento de estudiante). El secreto `CLIP_MONTO` ya no se usa y se puede borrar.
+El precio del curso es la columna `monto` de cada inscripción (1999 por defecto; 1499 cuando se aprueba un
+descuento de estudiante). Cada link cobra un pago: el completo, o el apartado y los pagos 2 y 3 (ver
+"Inscripción flexible"). El secreto `CLIP_MONTO` ya no se usa y se puede borrar.
 
 Diagnóstico:
 
@@ -117,8 +119,8 @@ inscripción de prueba (y vacía `clip_payment_url`) antes de pedir el link.
 
 ## Correo de confirmación (Resend)
 
-Cuando una inscripción pasa a `pago_estado = pagado` (por el webhook de Clip o por la verificación de
-respaldo de la página de éxito), la base de datos llama a la Edge Function `confirmacion-email`, que
+Cuando una inscripción obtiene acceso (`acceso_zoom = true`: pago completo, o apartado + pago 2), la base de
+datos llama a la Edge Function `confirmacion-email`, que
 envía el correo con Resend desde `inscripciones@teatranding.com`. Las respuestas de los alumnos llegan
 a `teatranding@gmail.com` (`reply_to`). Cada inscripción recibe un solo correo.
 
@@ -234,4 +236,70 @@ select email, estudiante_estado, monto, estudiante_listo_at, estudiante_correo_a
 from inscripciones where es_estudiante order by estudiante_solicitud_at desc;
 
 select * from cron.job_run_details where command like '%estudiantes_tick%' order by start_time desc limit 5;
+```
+
+## Inscripción flexible (apartado de $500 + 2 pagos)
+
+Al pagar, la persona elige:
+
+| Opción | Regular ($1,999) | Estudiante ($1,499) |
+|---|---|---|
+| Pago completo | $1,999 | $1,499 |
+| Apartado (hoy) | $500 | $500 |
+| Pago 2 (antes de la sesión del sábado 14 nov; link el 13) | $749.50 | $499.50 |
+| Pago 3 (lunes 30 nov) | $749.50 | $499.50 |
+
+- El enlace de Zoom (`confirmacion-email`) sale con el pago completo o, en parcialidades, con el pago 2.
+- Las inscripciones nuevas y los primeros pagos cierran al iniciar la primera sesión (14 nov, 10:00 CDMX):
+  `CIERRE` en `supabase/functions/inscripcion/index.ts` y `CIERRE_INSCRIPCIONES` en `src/content/curso.ts`.
+  Los pagos 2 y 3 siguen abiertos.
+- Cada pago confirmado es una fila de `pagos`. Un trigger recalcula `pago_estado` (`pendiente`, `parcial`,
+  `pagado`), `monto_pagado` y `acceso_zoom`, y llama a la Edge Function `parcialidades`.
+- `parcialidades` envía (una vez por inscripción): el correo de apartado, el link del pago 2 el viernes 13 nov a
+  las 07:07 (un día antes de la primera sesión; quien aparte después lo recibe al confirmarse su apartado), el link
+  del pago 3 el 30 nov a las 09:07 (solo a quien ya pagó el 2) y el correo de "liquidaste tu
+  curso". Fechas en `FECHA_PAGO2` / `FECHA_PAGO3`; textos en `correos`. Si Resend falla, la siguiente
+  corrida (cada hora, minuto 7) lo reintenta.
+- Los links de los correos son `SITE_URL/?pagar=<id>`: piden a `inscripcion` un link de Clip nuevo para el
+  siguiente pago, así que no vencen.
+
+Secretos de la Edge Function `parcialidades`:
+
+| Nombre | Valor |
+|---|---|
+| `RESEND_API_KEY` | La misma de `confirmacion-email` |
+| `PARCIALIDADES_TOKEN` | Texto aleatorio (solo letras y números, 32+ caracteres) |
+| `SITE_URL` | El mismo de `inscripcion` |
+
+Orden de instalación. El sitio va primero: el sitio nuevo funciona con las funciones anteriores (muestra el
+pago completo de siempre), pero el sitio anterior no funciona con las funciones nuevas.
+
+1. Genera el token (SQL Editor): `select encode(extensions.gen_random_bytes(24), 'hex');`. Guárdalo como secreto
+   `PARCIALIDADES_TOKEN` de las Edge Functions y en Vault:
+   ```sql
+   select vault.create_secret(
+     'https://<PROJECT-REF>.supabase.co/functions/v1/parcialidades?token=<PARCIALIDADES_TOKEN>',
+     'parcialidades_url'
+   );
+   ```
+2. Haz merge de la rama y publica el sitio.
+3. Despliega `parcialidades` (nueva) con verificación de JWT desactivada.
+4. Ejecuta la migración `20261103120000_pagos_parcialidades.sql`.
+5. Enseguida despliega `clip-webhook`, `inscripcion`, `confirmacion-email` y `estudiantes` (JWT desactivado).
+   Entre el paso 4 y este, un pago completado no dispararía el correo de Zoom; son un par de minutos.
+6. Actualiza el Apps Script de la Google Sheet con `integrations/google-sheets/Code.gs`, corre `configurar` y
+   publica una versión nueva del deployment existente (agrega Forma de pago, Pagado a la fecha, Saldo y
+   Último pago).
+
+Diagnóstico:
+
+```sql
+select i.email, i.plan_pago, i.monto, i.monto_pagado, i.pago_estado, i.acceso_zoom,
+       i.apartado_correo_at, i.pago2_correo_at, i.pago3_correo_at, i.liquidado_correo_at, i.parcialidades_error
+from inscripciones i where i.plan_pago is not null order by i.ultimo_pago_at desc;
+
+select p.pagado_at, i.email, p.concepto, p.monto, p.clip_payment_request_id
+from pagos p join inscripciones i on i.id = p.inscripcion_id order by p.pagado_at desc;
+
+select * from cron.job_run_details where command like '%parcialidades_tick%' order by start_time desc limit 5;
 ```

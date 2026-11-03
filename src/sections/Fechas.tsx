@@ -1,12 +1,15 @@
 import { useEffect, useMemo, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
-import { ArrowRight, Award, Check, CreditCard, Globe2, MonitorPlay, Timer } from 'lucide-react';
-import { CURSO, HORARIO_CDMX, SESIONES, ZONA_CURSO } from '../content/curso';
+import { ArrowRight, Award, Check, CreditCard, Globe2, Mail, MonitorPlay, Timer } from 'lucide-react';
+import { CURSO, HORARIO_CDMX, INSCRIPCION_FLEXIBLE, SESIONES, ZONA_CURSO } from '../content/curso';
+import { montos, pesos } from '../lib/precios';
 import { SectionHeading } from '../components/ui';
 import { fadeUp, stagger } from '../components/motion';
 import { formatDay, formatHour, userTimeZone, zoneLabel } from '../lib/time';
 
 const START = new Date(SESIONES[0].inicioUTC).getTime();
+const REGULAR = montos(CURSO.precio.monto);
+const ESTUDIANTE = montos(CURSO.precio.estudiante);
 const END = new Date(SESIONES[SESIONES.length - 1].finUTC).getTime();
 
 function useCountdown() {
@@ -149,6 +152,37 @@ export default function Fechas() {
               </p>
             )}
           </motion.div>
+
+          {/* Flexible enrollment: shown until sign-ups close (start of the first session) */}
+          {c.status === 'antes' && (
+            <motion.div variants={fadeUp} className="card p-7 sm:p-8 lg:col-span-6">
+              <div className="grid gap-6 md:grid-cols-[1fr_1.15fr] md:items-center">
+                <div>
+                  <h3 className="text-2xl font-bold leading-tight text-ink sm:text-3xl">{INSCRIPCION_FLEXIBLE.titulo}</h3>
+                  <p className="mt-3 text-text/85">{INSCRIPCION_FLEXIBLE.intro}</p>
+                </div>
+                <ol className="grid gap-3">
+                  {INSCRIPCION_FLEXIBLE.pagos.map((p, i) => (
+                    <li key={p.cuando} className="flex items-center gap-4 rounded-2xl border border-line/10 bg-bg/60 px-4 py-3">
+                      <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-gradient-to-br from-brand-violet to-brand-plum font-display text-base font-bold text-white">
+                        {i + 1}
+                      </span>
+                      <p className="text-text/90">
+                        <strong className="text-ink">{p.cuando}:</strong> {p.que}
+                      </p>
+                    </li>
+                  ))}
+                </ol>
+              </div>
+              <p className="mt-6 flex items-start gap-2 text-sm text-text/85">
+                <Mail size={16} className="mt-0.5 shrink-0 text-accent" aria-hidden /> {INSCRIPCION_FLEXIBLE.nota}
+              </p>
+              <p className="mt-2 pl-6 text-xs text-text/60">
+                Pagos 2 y 3: {pesos(REGULAR.pago2)} cada uno con precio regular ({pesos(REGULAR.completo)}), o{' '}
+                {pesos(ESTUDIANTE.pago2)} cada uno con precio de estudiante ({pesos(ESTUDIANTE.completo)}).
+              </p>
+            </motion.div>
+          )}
 
           {/* Modality */}
           <motion.div variants={fadeUp} className="card flex items-center gap-5 p-7 sm:p-8 lg:col-span-3">

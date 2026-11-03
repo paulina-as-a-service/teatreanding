@@ -30,13 +30,16 @@ export const CURSO = {
   modalidad: 'En línea por Zoom',
   duracionHoras: 20,
   precio: {
-    // Precio regular. Clip cobra el `monto` de cada inscripción (1999 por defecto en la base de datos).
+    // Precio regular. El precio de cada inscripción es su `monto` (1999 por defecto en la base de datos).
     monto: 1999,
     moneda: 'MXN',
-    nota: 'Pago único',
+    nota: 'En un solo pago, o aparta tu lugar con $500',
     // 25% de descuento para estudiantes con credencial vigente (lo valida Mauricio Baylón).
     // Debe coincidir con MONTO_ESTUDIANTE en supabase/functions/estudiantes/index.ts.
     estudiante: 1499,
+    // Apartado de la inscripción flexible. El resto se divide en 2 pagos iguales (14 y 30 de noviembre).
+    // Debe coincidir con APARTADO en las Edge Functions `inscripcion` y `parcialidades`.
+    apartado: 500,
   },
   // Confirmado por la usuaria (16 oct 2026): reconocimiento por 20 horas, solo con 100% de asistencia (la registra Mauricio Baylón).
   reconocimiento: {
@@ -53,6 +56,27 @@ export const CURSO = {
   // Fuente: Calendario IG (dato histórico del deck)
   historia: 'Entre 2020 y 2021 formamos a más de 120 hacedores de teatro en seminarios de vestuario, escenografía, stage management y más.',
 } as const;
+
+/**
+ * Inscripción flexible. Copy final de la usuaria (3 nov 2026). Los montos de cada pago se calculan aparte
+ * (src/lib/precios.ts) y se muestran debajo de este texto.
+ */
+export const INSCRIPCION_FLEXIBLE = {
+  titulo: 'Inscripción flexible: Aparta tu lugar hoy con $500',
+  intro: 'Asegura tu cupo en el curso y liquida el resto en 2 pagos quincenales, sin intereses ni trámites extra:',
+  pagos: [
+    { cuando: 'Hoy', que: '$500 MXN para apartar tu lugar.' },
+    { cuando: '14 de noviembre (Día de inicio)', que: 'Pago 2.' },
+    { cuando: '30 de noviembre (A mitad del curso)', que: 'Pago 3 y final.' },
+  ],
+  nota: 'Recibirás directamente en tu correo los enlaces seguros para realizar tus siguientes dos pagos en las fechas marcadas.',
+};
+
+/**
+ * Cierre de inscripciones: al iniciar la primera sesión (sábado 14 nov, 10:00 CDMX).
+ * Debe coincidir con CIERRE en supabase/functions/inscripcion/index.ts (el servidor es quien decide).
+ */
+export const CIERRE_INSCRIPCIONES = '2026-11-14T16:00:00Z';
 
 /**
  * Sesiones: sábados de 10:00 a 14:00, hora de la Ciudad de México (UTC-6, sin horario de verano).

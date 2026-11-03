@@ -1,9 +1,11 @@
 import { useState, type FormEvent, type ReactNode } from 'react';
 import { AnimatePresence, motion, useAnimationControls } from 'framer-motion';
 import { AlertCircle, ArrowRight, Check, CreditCard, GraduationCap, Loader2, Mail, Paperclip, RefreshCw, X } from 'lucide-react';
-import { AVISO_VERSION, CURSO } from '../content/curso';
+import { AVISO_VERSION, CIERRE_INSCRIPCIONES, CURSO } from '../content/curso';
 import { SectionHeading } from '../components/ui';
+import OpcionesPago from '../components/OpcionesPago';
 import { supabase } from '../lib/supabase';
+import { montos, pesos, type Opciones } from '../lib/precios';
 import {
   MAX_CREDENCIAL_BYTES,
   TIPOS_CREDENCIAL,
@@ -96,7 +98,19 @@ function Field({
   );
 }
 
-const fmt = (n: number) => `$${n.toLocaleString('es-MX')} ${CURSO.precio.moneda}`;
+const fmt = pesos;
+const inscripcionesCerradas = () => Date.now() >= Date.parse(CIERRE_INSCRIPCIONES);
+
+function Cerrado() {
+  return (
+    <div className="text-center" role="status">
+      <h3 className="text-2xl font-bold text-ink">Las inscripciones de esta edición ya cerraron</h3>
+      <p className="mx-auto mt-3 max-w-md text-text/85">
+        El curso arrancó el sábado 14 de noviembre. Si quieres enterarte de la próxima edición, escríbenos y te avisamos.
+      </p>
+    </div>
+  );
+}
 
 const Step = ({ n, label, active, done }: { n: number; label: string; active: boolean; done: boolean }) => (
   <li className="flex items-center gap-3">
@@ -123,6 +137,10 @@ export default function Inscripcion() {
   const [yaPagado, setYaPagado] = useState(false);
   const [reintentando, setReintentando] = useState(false);
   const [monto, setMonto] = useState<number>(CURSO.precio.monto);
+  // First payment: the person chooses "apartar con $500" or "pagar completo".
+  const [opciones, setOpciones] = useState<Opciones | null>(null);
+  const [yaApartado, setYaApartado] = useState(false);
+  const [cerrado, setCerrado] = useState(inscripcionesCerradas);
   // Student-discount request: whether the ID made it to the server (null = not a student request).
   const [solicitud, setSolicitud] = useState<null | { conCredencial: boolean; subidaFallida: boolean }>(null);
   const shake = useAnimationControls();
@@ -165,6 +183,11 @@ export default function Inscripcion() {
         avisoVersion: AVISO_VERSION,
         esEstudiante: f.estudiante === 'si',
       });
+      if (r.cerrado && !r.ya_pagado && !r.ya_apartado) {
+        setCerrado(true);
+        setStatus('idle');
+        return;
+      }
       if (!r.ok || !r.id) throw new Error(r.error ?? 'sin-id');
       setRegistroId(r.id);
       if (r.estudiante && r.en_revision !== false && !r.payment_url && !r.ya_pagado) {
@@ -188,8 +211,10 @@ export default function Inscripcion() {
       }
       setSolicitud(null);
       if (typeof r.monto === 'number') setMonto(r.monto);
+      setOpciones(r.requiere_plan ? (r.opciones ?? montos(r.total ?? CURSO.precio.monto)) : null);
       setPagoUrl(r.payment_url ?? null);
       setYaPagado(!!r.ya_pagado);
+      setYaApartado(!!r.ya_apartado);
       setStatus('done');
     } catch {
       setStatus('error');
@@ -202,6 +227,8 @@ export default function Inscripcion() {
     setReintentando(true);
     try {
       const r = await obtenerLinkPago(registroId);
+      if (r.cerrado) return setCerrado(true);
+      setOpciones(r.requiere_plan ? (r.opciones ?? montos(r.total ?? CURSO.precio.monto)) : null);
       setPagoUrl(r.payment_url ?? null);
       setYaPagado(!!r.ya_pagado);
       if (typeof r.monto === 'number') setMonto(r.monto);
@@ -229,7 +256,7 @@ export default function Inscripcion() {
               Aparta tu lugar en <span className="gradient-text">dos pasos</span>
             </>
           }
-          intro="Primero déjanos tus datos y después realiza tu pago en línea."
+          intro={`Primero déjanos tus datos. Después eliges cómo pagar: completo o apartando tu lugar con ${fmt(CURSO.precio.apartado)}.`}
         />
 
         <motion.div
@@ -253,6 +280,9 @@ export default function Inscripcion() {
             <Step n={2} label="Pago" active={done} done={false} />
           </ol>
 
+          {cerrado && !done ? (
+            <Cerrado />
+          ) : (
           <AnimatePresence mode="wait">
             {!done ? (
               <motion.form
@@ -558,12 +588,26 @@ export default function Inscripcion() {
                       </p>
                     )}
                     <p>
-                      Si queda validada, te mandamos tu link de pago por{' '}
-                      <strong className="text-ink">{fmt(CURSO.precio.estudiante)}</strong>. Tu lugar queda apartado cuando
-                      se confirma el pago.
+                      Si queda validada, te mandamos tu link de pago con precio de estudiante:{' '}
+                      <strong className="text-ink">{fmt(CURSO.precio.estudiante)}</strong> en un solo pago, o{' '}
+                      {fmt(CURSO.precio.apartado)} para apartar tu lugar y el resto en 2 pagos.
                     </p>
                     <p className="text-sm text-text/70">Si no ves el correo, revisa tu carpeta de spam o promociones.</p>
                   </div>
+                ) : cerrado ? (
+                  <p className="mx-auto mt-2 max-w-md text-text/85">
+                    Las inscripciones de esta edición cerraron al iniciar el curso, el sábado 14 de noviembre.
+                  </p>
+                ) : yaApartado ? (
+                  <p className="mx-auto mt-2 max-w-md text-text/85">
+                    Ya apartaste tu lugar con este correo. Te mandamos los enlaces de tus siguientes pagos a{' '}
+                    <strong className="text-ink">{f.email.trim()}</strong> en las fechas marcadas.
+                  </p>
+                ) : opciones && registroId ? (
+                  <>
+                    <p className="mx-auto mt-2 max-w-md text-text/85">Recibimos tus datos. Elige cómo quieres pagar:</p>
+                    <OpcionesPago id={registroId} opciones={opciones} onCerrado={() => setCerrado(true)} />
+                  </>
                 ) : yaPagado ? (
                   <p className="mx-auto mt-2 max-w-md text-text/85">
                     Ya tenemos registrado un pago con este correo, así que no necesitas pagar de nuevo. Si quieres
@@ -609,6 +653,7 @@ export default function Inscripcion() {
               </motion.div>
             )}
           </AnimatePresence>
+          )}
         </motion.div>
       </div>
     </section>

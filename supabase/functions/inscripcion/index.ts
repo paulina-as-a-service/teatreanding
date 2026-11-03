@@ -3,27 +3,35 @@
  *
  * Called by the landing page form (supabase.functions.invoke('inscripcion')).
  *   { accion: 'registrar', nombre, apellidos, email, motivo, aceptaPrivacidad, aceptaComunicaciones, avisoVersion }
- *     -> saves (or refreshes) the registration and returns its Clip payment link.
- *   { accion: 'link', id }
- *     -> returns a valid Clip payment link for an existing registration (creates a new one if expired).
+ *     -> saves (or refreshes) the registration. With no payment yet it answers `requiere_plan` and the
+ *        amounts of both options; the page then asks for the link with the option chosen.
+ *   { accion: 'link', id, plan?: 'completo' | 'parcialidades' }
+ *     -> returns a valid Clip payment link for the next payment of that registration (creates a new one if
+ *        expired). First payment: `plan` decides between the full amount and the $500 apartado; without it,
+ *        the answer is `requiere_plan`. After the apartado: pago 2, then pago 3 (no `plan` needed).
  *   { accion: 'registrar', ..., esEstudiante: true }
  *     -> saves the registration as a student-discount request (no payment link yet) and returns a
  *        signed upload URL for the student ID in the private bucket `documentos-estudiantes`.
  *   { accion: 'estudiante_listo', id }
  *     -> called after the optional upload. Marks the request as ready; a database trigger then calls
  *        the `estudiantes` function, which sends the emails to the student and to Mauricio.
- *   { accion: 'estado', id }
- *     -> returns only whether that registration is paid (used after Clip redirects back).
- *        If it is still pending, it asks Clip directly about every link created for it, so a
+ *   { accion: 'estado', id, concepto? }
+ *     -> returns whether that payment (or, without `concepto`, the whole course) is recorded. Used after Clip
+ *        redirects back. If not, it asks Clip directly about the registration's unrecorded links, so a
  *        payment is confirmed even if Clip's webhook is late or missing.
+ *
+ * Payments: 'completo' (the registration's `monto`) or 'apartado' ($500) + 'pago2' + 'pago3' (the rest in two
+ * equal parts: 749.50 each for 1999, 499.50 each for 1499). Each confirmed payment is a row in `pagos`
+ * (database function registrar_pago_clip); the database recalculates pago_estado and sends the emails.
+ * New registrations and first payments close at CIERRE (start of the course). Pago 2 and pago 3 stay open.
  *
  * Secrets (Supabase > Edge Functions > Secrets):
  *   CLIP_API_KEY, CLIP_SECRET_KEY   Clip credential ("Tienda online")
  *   CLIP_WEBHOOK_TOKEN              random string, must match the clip-webhook function
  *   SITE_URL                        https://teatranding.com (antes https://teatranding.bolt.host)
  *
- * The amount charged comes from the registration's `monto` column (1999 by default, 1499 once a
- * student discount is approved by the `estudiantes` function). CLIP_MONTO is no longer used.
+ * The course price is the registration's `monto` column (1999 by default, 1499 once a student discount is
+ * approved by the `estudiantes` function). Each link charges montoDe(monto, concepto). CLIP_MONTO is not used.
  * Provided automatically by Supabase: SUPABASE_URL and the service key (legacy or new format).
  *
  * Deploy with JWT verification OFF (the function validates its own input).
@@ -44,10 +52,42 @@ type Fila = {
   monto: number | string;
   es_estudiante: boolean;
   estudiante_estado: string | null;
+  plan_pago: string | null;
+  clip_link_concepto: string | null;
+  monto_pagado: number | string | null;
 };
 
+export type Concepto = 'completo' | 'apartado' | 'pago2' | 'pago3';
+type Plan = 'completo' | 'parcialidades';
+
 const COLUMNAS =
-  'id,nombre,apellidos,email,pago_estado,clip_payment_url,clip_link_expires_at,monto,es_estudiante,estudiante_estado';
+  'id,nombre,apellidos,email,pago_estado,clip_payment_url,clip_link_expires_at,monto,es_estudiante,estudiante_estado,plan_pago,clip_link_concepto,monto_pagado';
+const CONCEPTOS = new Set<string>(['completo', 'apartado', 'pago2', 'pago3']);
+export const APARTADO = 500;
+/** Sign-ups and first payments close when the course starts: Saturday 14 Nov 2026, 10:00 CDMX. */
+export const CIERRE = '2026-11-14T16:00:00Z';
+
+const redondear = (n: number) => Math.round(n * 100) / 100;
+/** Amount of each payment for a course price (pago2 and pago3 split the rest in two). */
+export function montoDe(total: number, concepto: Concepto): number {
+  const cuota = redondear((total - APARTADO) / 2);
+  if (concepto === 'apartado') return APARTADO;
+  if (concepto === 'pago2') return cuota;
+  if (concepto === 'pago3') return redondear(total - APARTADO - cuota);
+  return total;
+}
+const opcionesDe = (total: number) => ({
+  completo: total,
+  apartado: APARTADO,
+  pago2: montoDe(total, 'pago2'),
+  pago3: montoDe(total, 'pago3'),
+});
+const ETIQUETA: Record<Concepto, string> = {
+  completo: '',
+  apartado: ' · Apartado',
+  pago2: ' · Pago 2 de 3',
+  pago3: ' · Pago 3 de 3',
+};
 const BUCKET = 'documentos-estudiantes';
 const PENDIENTES = new Set(['pendiente_documento', 'en_revision']);
 /** Student request still waiting for Mauricio's decision: no payment link until then. */
@@ -84,12 +124,16 @@ const texto = (v: unknown, max: number) => (typeof v === 'string' ? v.trim().sli
 export function crearHandler(deps: Deps) {
   const { db, env } = deps;
 
-  const linkVigente = (f: Fila) =>
+  const cerrado = () => deps.now().getTime() >= Date.parse(CIERRE);
+  const totalDe = (f: Fila) => Number(f.monto ?? 1999);
+
+  const linkVigente = (f: Fila, concepto: Concepto) =>
+    f.clip_link_concepto === concepto &&
     !!f.clip_payment_url &&
     !!f.clip_link_expires_at &&
     new Date(f.clip_link_expires_at).getTime() - deps.now().getTime() > MARGEN_MS;
 
-  async function crearLinkClip(f: Fila): Promise<string> {
+  async function crearLinkClip(f: Fila, concepto: Concepto): Promise<string> {
     const key = env.get('CLIP_API_KEY');
     const secret = env.get('CLIP_SECRET_KEY');
     const site = (env.get('SITE_URL') ?? '').replace(/\/+$/, '');
@@ -97,19 +141,20 @@ export function crearHandler(deps: Deps) {
     const token = env.get('CLIP_WEBHOOK_TOKEN');
     if (!key || !secret || !site || !supabaseUrl || !token) throw new Error('Faltan secretos de Clip o SITE_URL');
 
-    const monto = Number(f.monto ?? 1999);
-    if (!Number.isFinite(monto) || monto < 1) throw new Error(`Monto inválido para ${f.id}: ${f.monto}`);
+    const total = totalDe(f);
+    const monto = montoDe(total, concepto);
+    if (!Number.isFinite(monto) || monto < 1) throw new Error(`Monto inválido para ${f.id}: ${f.monto} (${concepto})`);
 
     const res = await deps.fetch(env.get('CLIP_API_URL') ?? CLIP_API, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: 'Basic ' + btoa(`${key}:${secret}`) },
       body: JSON.stringify({
-        amount: Math.round(monto * 100) / 100,
+        amount: redondear(monto),
         currency: 'MXN',
-        purchase_description: monto < 1999 ? `${DESCRIPCION} · Precio estudiante` : DESCRIPCION,
+        purchase_description: `${DESCRIPCION}${total < 1999 ? ' · Precio estudiante' : ''}${ETIQUETA[concepto]}`,
         redirection_url: {
-          success: `${site}/?pago=exito&ref=${f.id}`,
-          error: `${site}/?pago=error&ref=${f.id}`,
+          success: `${site}/?pago=exito&ref=${f.id}&c=${concepto}`,
+          error: `${site}/?pago=error&ref=${f.id}&c=${concepto}`,
           default: `${site}/`,
         },
         metadata: {
@@ -136,6 +181,7 @@ export function crearHandler(deps: Deps) {
         clip_payment_request_id: data.payment_request_id,
         clip_payment_url: data.payment_request_url,
         clip_link_expires_at: expira.toISOString(),
+        clip_link_concepto: concepto,
         clip_ultimo_estado: data.status ?? 'CHECKOUT_CREATED',
         clip_actualizado_at: deps.now().toISOString(),
       })
@@ -147,22 +193,51 @@ export function crearHandler(deps: Deps) {
       inscripcion_id: f.id,
       payment_url: data.payment_request_url,
       expires_at: expira.toISOString(),
+      concepto,
+      monto,
     });
     if (errLink) console.error('clip_links insert failed', f.id, errLink.message);
     return data.payment_request_url as string;
   }
 
+  /** Payments already recorded for a registration. */
+  async function conceptosPagados(id: string): Promise<Set<string>> {
+    const { data, error } = await db.from('pagos').select('concepto').eq('inscripcion_id', id);
+    if (error) throw error;
+    return new Set(((data ?? []) as { concepto: string }[]).map((p) => p.concepto));
+  }
+
+  /** Next payment due: a concept, 'elegir' (first payment, no plan chosen yet) or null (nothing left). */
+  async function siguiente(f: Fila, plan: Plan | null): Promise<Concepto | 'elegir' | null> {
+    if (f.pago_estado === 'pagado') return null;
+    const pagados = await conceptosPagados(f.id);
+    if (pagados.has('completo')) return null;
+    if (pagados.has('apartado')) return !pagados.has('pago2') ? 'pago2' : !pagados.has('pago3') ? 'pago3' : null;
+    if (pagados.size) return null; // only manual corrections can get here; the team handles them
+    if (plan === 'completo') return 'completo';
+    if (plan === 'parcialidades') return 'apartado';
+    return 'elegir';
+  }
+
   /** Returns the response body for a registration that needs a payment link. */
-  async function respuestaConLink(f: Fila) {
+  async function respuestaConLink(f: Fila, plan: Plan | null) {
     if (f.pago_estado === 'pagado') return { ok: true, id: f.id, ya_pagado: true };
     if (enRevision(f)) return { ok: true, id: f.id, estudiante: true, en_revision: true, payment_url: null };
-    const monto = Number(f.monto ?? 1999);
-    if (linkVigente(f)) return { ok: true, id: f.id, monto, payment_url: f.clip_payment_url };
+    const total = totalDe(f);
+    const base = { ok: true, id: f.id, total, opciones: opcionesDe(total), monto_pagado: Number(f.monto_pagado ?? 0) };
+    const concepto = await siguiente(f, plan);
+    if (concepto === null) return { ...base, ya_pagado: true };
+    if ((concepto === 'elegir' || concepto === 'completo' || concepto === 'apartado') && cerrado()) {
+      return { ...base, cerrado: true, payment_url: null };
+    }
+    if (concepto === 'elegir') return { ...base, requiere_plan: true, payment_url: null };
+    const monto = montoDe(total, concepto);
+    if (linkVigente(f, concepto)) return { ...base, concepto, monto, payment_url: f.clip_payment_url };
     try {
-      return { ok: true, id: f.id, monto, payment_url: await crearLinkClip(f) };
+      return { ...base, concepto, monto, payment_url: await crearLinkClip(f, concepto) };
     } catch (e) {
-      console.error('Clip link error', f.id, e instanceof Error ? e.message : e);
-      return { ok: true, id: f.id, monto, payment_url: null, error_pago: true };
+      console.error('Clip link error', f.id, concepto, e instanceof Error ? e.message : e);
+      return { ...base, concepto, monto, payment_url: null, error_pago: true };
     }
   }
 
@@ -199,6 +274,9 @@ export function crearHandler(deps: Deps) {
     if (errSel) throw errSel;
     const previa = (previas?.[0] ?? null) as Fila | null;
     if (previa?.pago_estado === 'pagado') return json({ ok: true, id: previa.id, ya_pagado: true });
+    // Already paid the apartado: nothing on the row changes; the next links arrive by email.
+    if (previa && Number(previa.monto_pagado ?? 0) > 0) return json({ ok: true, id: previa.id, ya_apartado: true });
+    if (cerrado()) return json({ ok: true, id: null, cerrado: true });
 
     // What changes on the row depending on the "¿Eres estudiante?" answer.
     let extra: Record<string, unknown>;
@@ -225,6 +303,7 @@ export function crearHandler(deps: Deps) {
         monto: 1999,
         clip_payment_url: null,
         clip_link_expires_at: null,
+        clip_link_concepto: null,
       };
     }
 
@@ -249,7 +328,7 @@ export function crearHandler(deps: Deps) {
     }
 
     if (enRevision(fila)) return json(await respuestaEstudiante(fila));
-    return json(await respuestaConLink(fila));
+    return json(await respuestaConLink(fila, null));
   }
 
   /** Student request: signed URL so the browser can upload the ID straight to the private bucket. */
@@ -285,19 +364,37 @@ export function crearHandler(deps: Deps) {
     const { data, error } = await db.from('inscripciones').select(COLUMNAS).eq('id', id).maybeSingle();
     if (error) throw error;
     if (!data) return json({ ok: false, error: 'no_encontrada' }, 404);
-    return json(await respuestaConLink(data as Fila));
+    const plan = b.plan === 'completo' || b.plan === 'parcialidades' ? b.plan : null;
+    return json(await respuestaConLink(data as Fila, plan));
   }
 
-  /** Asks Clip about every link of a pending registration; marks it paid if one is completed. */
-  async function verificarConClip(id: string, actual: string | null): Promise<boolean> {
+  /**
+   * Asks Clip about every link of the registration that has no recorded payment yet, and records the completed
+   * ones (database function registrar_pago_clip; the database then recalculates the row and sends the emails).
+   */
+  async function verificarConClip(id: string): Promise<void> {
     const key = env.get('CLIP_API_KEY');
     const secret = env.get('CLIP_SECRET_KEY');
-    if (!key || !secret) return false;
-    const { data: links } = await db.from('clip_links').select('payment_request_id').eq('inscripcion_id', id);
-    const ids = new Set<string>(((links ?? []) as { payment_request_id: string }[]).map((l) => l.payment_request_id));
-    if (actual) ids.add(actual);
-    for (const prid of ids) {
-      const l = { payment_request_id: prid };
+    if (!key || !secret) return;
+    const { data: fila } = await db
+      .from('inscripciones')
+      .select('monto,clip_payment_request_id,clip_link_concepto')
+      .eq('id', id)
+      .maybeSingle();
+    if (!fila) return;
+    const { data: links } = await db.from('clip_links').select('payment_request_id,concepto,monto').eq('inscripcion_id', id);
+    const { data: pagos } = await db.from('pagos').select('clip_payment_request_id').eq('inscripcion_id', id);
+    const registrados = new Set(((pagos ?? []) as { clip_payment_request_id: string | null }[]).map((p) => p.clip_payment_request_id));
+
+    type Link = { payment_request_id: string; concepto: string | null; monto: number | string | null };
+    const lista = (links ?? []) as Link[];
+    const actual = fila.clip_payment_request_id as string | null;
+    if (actual && !lista.some((l) => l.payment_request_id === actual)) {
+      lista.push({ payment_request_id: actual, concepto: fila.clip_link_concepto ?? 'completo', monto: null });
+    }
+
+    for (const l of lista) {
+      if (registrados.has(l.payment_request_id)) continue;
       try {
         const res = await deps.fetch(`${env.get('CLIP_API_URL') ?? CLIP_API}/${encodeURIComponent(l.payment_request_id)}`, {
           headers: { Authorization: 'Basic ' + btoa(`${key}:${secret}`) },
@@ -308,52 +405,66 @@ export function crearHandler(deps: Deps) {
         if (!COMPLETADO.has(st)) {
           // Leave a visible trace of what Clip answered (or which fields it sent, if no status).
           const traza = (st || `SIN_ESTADO(${Object.keys(clip).join(',')})`).slice(0, 200);
-          if (prid === actual) {
+          if (l.payment_request_id === actual) {
             await db
               .from('inscripciones')
               .update({ clip_ultimo_estado: traza, clip_actualizado_at: deps.now().toISOString() })
-              .eq('id', id)
-              .eq('pago_estado', 'pendiente');
+              .eq('id', id);
           }
           continue;
         }
+        const concepto = (CONCEPTOS.has(l.concepto ?? '') ? l.concepto : 'completo') as Concepto;
+        const monto = l.monto != null ? Number(l.monto) : montoDe(Number(fila.monto ?? 1999), concepto);
         const ahora = deps.now().toISOString();
-        const { error } = await db
+        const { error } = await db.rpc('registrar_pago_clip', {
+          p_inscripcion: id,
+          p_concepto: concepto,
+          p_monto: monto,
+          p_payment_request_id: l.payment_request_id,
+          p_pagado_at: fechaValida(clip.payment_date, clip.completed_at, clip.modified_at) ?? ahora,
+          p_transaction_id: textoClip(clip.transaction_id),
+          p_receipt_no: textoClip(clip.receipt_no),
+          p_payment_type: textoClip(clip.payment_type),
+        });
+        if (error) throw error;
+        await db
           .from('inscripciones')
           .update({
-            pago_estado: 'pagado',
-            pagado_at: fechaValida(clip.payment_date, clip.completed_at, clip.modified_at) ?? ahora,
-            clip_payment_request_id: l.payment_request_id,
             clip_ultimo_estado: st,
             clip_transaction_id: textoClip(clip.transaction_id),
             clip_receipt_no: textoClip(clip.receipt_no),
             clip_payment_type: textoClip(clip.payment_type),
             clip_actualizado_at: ahora,
           })
-          .eq('id', id)
-          .eq('pago_estado', 'pendiente');
-        if (error) throw error;
-        return true;
+          .eq('id', id);
       } catch (e) {
         console.error('Clip status check failed', l.payment_request_id, e instanceof Error ? e.message : e);
       }
     }
-    return false;
   }
 
   async function estado(b: Record<string, unknown>) {
     const id = texto(b.id, 36);
     if (!UUID_RE.test(id)) return json({ ok: false, error: 'id' }, 400);
-    const { data, error } = await db
-      .from('inscripciones')
-      .select('pago_estado,clip_payment_request_id')
-      .eq('id', id)
-      .maybeSingle();
-    if (error) throw error;
-    if (!data) return json({ ok: false, error: 'no_encontrada' }, 404);
-    if (data.pago_estado === 'pagado') return json({ ok: true, pagado: true });
-    const pagado = data.pago_estado === 'pendiente' ? await verificarConClip(id, data.clip_payment_request_id) : false;
-    return json({ ok: true, pagado });
+    const concepto = CONCEPTOS.has(texto(b.concepto, 20)) ? (texto(b.concepto, 20) as Concepto) : null;
+    const consultar = async () => {
+      const { data, error } = await db.from('inscripciones').select('pago_estado').eq('id', id).maybeSingle();
+      if (error) throw error;
+      if (!data) return null;
+      const pagados = await conceptosPagados(id);
+      return {
+        pago_estado: data.pago_estado as string,
+        // With `concepto`: was that payment recorded. Without it (links created before installments): full payment.
+        pagado: data.pago_estado === 'pagado' || (concepto !== null && pagados.has(concepto)),
+      };
+    };
+    let r = await consultar();
+    if (!r) return json({ ok: false, error: 'no_encontrada' }, 404);
+    if (!r.pagado && r.pago_estado !== 'cancelado') {
+      await verificarConClip(id);
+      r = (await consultar()) ?? r;
+    }
+    return json({ ok: true, pagado: r.pagado, pago_estado: r.pago_estado });
   }
 
   return async (req: Request): Promise<Response> => {

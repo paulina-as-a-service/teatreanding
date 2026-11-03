@@ -3,8 +3,8 @@
  *
  * Emails for the installment plan ($500 to reserve the spot, then pago 2 and pago 3):
  *   - apartado:  "Apartaste tu lugar" right after the $500 is confirmed (amounts and dates of the next payments).
- *   - pago2:     link to pay pago 2 on FECHA_PAGO2 (day the course starts). The Zoom email goes out when it is paid
- *                (function `confirmacion-email`).
+ *   - pago2:     link to pay pago 2 on FECHA_PAGO2 (the day before the course starts, so there is time to pay before
+ *                the first session). The Zoom email goes out when it is paid (function `confirmacion-email`).
  *   - pago3:     link to pay pago 3 on FECHA_PAGO3, to whoever already paid pago 2.
  *   - liquidado: "Liquidaste tu curso" once the balance reaches zero.
  * Each email goes out once per registration (claimed with a timestamp column before sending; if Resend fails, the
@@ -51,12 +51,14 @@ const COLUMNAS =
 
 /* ------------------------------------------------------------------------------------------
  * FECHAS DE ENVÍO (hora CDMX = UTC-6)
- * Pago 2: sábado 14 de noviembre, 07:00 (antes de la primera sesión, 10:00).
+ * Pago 2: viernes 13 de noviembre, 07:00 (un día antes de la primera sesión, sábado 14 a las 10:00).
+ *         Quien aparta después de esa hora recibe el link del pago 2 en cuanto se confirma su apartado.
  * Pago 3: lunes 30 de noviembre, 09:00.
  * La tarea programada corre cada hora en el minuto 7, así que los correos salen a las 07:07 y 09:07.
  * ---------------------------------------------------------------------------------------- */
-export const FECHA_PAGO2 = '2026-11-14T13:00:00Z';
+export const FECHA_PAGO2 = '2026-11-13T13:00:00Z';
 export const FECHA_PAGO3 = '2026-11-30T15:00:00Z';
+const DIA_PREVIO_CDMX = '2026-11-13';
 const DIA_INICIO_CDMX = '2026-11-14';
 
 const APARTADO = 500;
@@ -128,23 +130,33 @@ export const correos = {
       `Hola, ${primerNombre(f)}:`,
       `Recibimos tus **${pesos(m.apartado)}**. Tu lugar en ${CURSO_NOMBRE} ya está apartado.`,
       `Así quedan tus siguientes pagos (total del curso: ${pesos(m.total)}):`,
-      `**Pago 2: ${pesos(m.pago2)}**, sábado 14 de noviembre (día de inicio).`,
-      `**Pago 3: ${pesos(m.pago3)}**, lunes 30 de noviembre (pago final).`,
-      'En cada fecha te mandamos a este correo el enlace seguro de Clip para pagar. Sin intereses ni trámites extra.',
+      `**Pago 2: ${pesos(m.pago2)}**, antes de la primera sesión del sábado 14 de noviembre. El enlace te llega el viernes 13 por la mañana.`,
+      `**Pago 3: ${pesos(m.pago3)}**, lunes 30 de noviembre (pago final). El enlace te llega ese día.`,
+      'Los enlaces son de la página segura de Clip y llegan a este correo. Sin intereses ni trámites extra.',
       'El enlace de Zoom te llega en cuanto se confirme tu pago 2.',
     ], [], [dudas]);
   },
 
-  pago2: (f: Fila, pagoUrl: string, hoyEsInicio: boolean, logo: string | null) => {
+  /** `dia`: 'previo' (13 Nov), 'inicio' (14 Nov) or 'despues' (late apartado, course already running). */
+  pago2: (f: Fila, pagoUrl: string, dia: 'previo' | 'inicio' | 'despues', logo: string | null) => {
     const m = montos(Number(f.monto));
+    const pago = `**pago 2 de ${pesos(m.pago2)}**`;
+    const asunto = {
+      previo: 'Teatranding: mañana arranca el curso, realiza tu pago 2',
+      inicio: 'Teatranding: hoy arranca el curso, realiza tu pago 2',
+      despues: 'Teatranding: realiza tu pago 2',
+    }[dia];
+    const texto = {
+      previo: `Mañana, sábado 14 de noviembre, arranca el curso, de 10:00 a 14:00 hrs (hora CDMX). Para recibir el enlace de Zoom, realiza tu ${pago} antes de la primera sesión.`,
+      inicio: `Hoy arranca el curso, de 10:00 a 14:00 hrs (hora CDMX). Para recibir el enlace de Zoom, realiza tu ${pago} antes de la sesión.`,
+      despues: `Para recibir el enlace de Zoom del curso, realiza tu ${pago}.`,
+    }[dia];
     return armar(
-      hoyEsInicio ? 'Teatranding: hoy arranca el curso, realiza tu pago 2' : 'Teatranding: realiza tu pago 2',
+      asunto,
       logo,
       [
         `Hola, ${primerNombre(f)}:`,
-        hoyEsInicio
-          ? `Hoy arranca el curso, de 10:00 a 14:00 hrs (hora CDMX). Para recibir el enlace de Zoom, realiza tu **pago 2 de ${pesos(m.pago2)}** antes de la sesión.`
-          : `Para recibir el enlace de Zoom del curso, realiza tu **pago 2 de ${pesos(m.pago2)}**.`,
+        texto,
         'En cuanto Clip confirme el pago te llega un correo con el enlace de Zoom y los datos de las sesiones.',
       ],
       [{ texto: `Pagar ${pesos(m.pago2)}`, url: pagoUrl }],
@@ -183,6 +195,12 @@ const iguales = (a: string, b: string) => {
 /** YYYY-MM-DD in Mexico City. */
 const diaCDMX = (d: Date) =>
   new Intl.DateTimeFormat('en-CA', { timeZone: ZONA, year: 'numeric', month: '2-digit', day: '2-digit' }).format(d);
+
+/** Which version of the pago 2 email fits today. */
+const diaPago2 = (t: Date) => {
+  const d = diaCDMX(t);
+  return d <= DIA_PREVIO_CDMX ? 'previo' : d === DIA_INICIO_CDMX ? 'inicio' : 'despues';
+};
 
 type Columna = 'apartado_correo_at' | 'pago2_correo_at' | 'pago3_correo_at' | 'liquidado_correo_at';
 
@@ -253,7 +271,7 @@ export function crearHandler(deps: Deps) {
       !pagados.has('pago2') &&
       !f.pago2_correo_at &&
       t.getTime() >= Date.parse(FECHA_PAGO2) &&
-      (await enviarUnaVez(f, 'pago2_correo_at', () => correos.pago2(f, pagoUrl(f.id), diaCDMX(t) === DIA_INICIO_CDMX, logo()), 'pago2'))
+      (await enviarUnaVez(f, 'pago2_correo_at', () => correos.pago2(f, pagoUrl(f.id), diaPago2(t), logo()), 'pago2'))
     ) {
       enviados.push('pago2');
     }

@@ -246,7 +246,7 @@ Al pagar, la persona elige:
 |---|---|---|
 | Pago completo | $1,999 | $1,499 |
 | Apartado (hoy) | $500 | $500 |
-| Pago 2 (sábado 14 nov) | $749.50 | $499.50 |
+| Pago 2 (antes de la sesión del sábado 14 nov; link el 13) | $749.50 | $499.50 |
 | Pago 3 (lunes 30 nov) | $749.50 | $499.50 |
 
 - El enlace de Zoom (`confirmacion-email`) sale con el pago completo o, en parcialidades, con el pago 2.
@@ -255,8 +255,9 @@ Al pagar, la persona elige:
   Los pagos 2 y 3 siguen abiertos.
 - Cada pago confirmado es una fila de `pagos`. Un trigger recalcula `pago_estado` (`pendiente`, `parcial`,
   `pagado`), `monto_pagado` y `acceso_zoom`, y llama a la Edge Function `parcialidades`.
-- `parcialidades` envía (una vez por inscripción): el correo de apartado, el link del pago 2 el 14 nov a las
-  07:07, el link del pago 3 el 30 nov a las 09:07 (solo a quien ya pagó el 2) y el correo de "liquidaste tu
+- `parcialidades` envía (una vez por inscripción): el correo de apartado, el link del pago 2 el viernes 13 nov a
+  las 07:07 (un día antes de la primera sesión; quien aparte después lo recibe al confirmarse su apartado), el link
+  del pago 3 el 30 nov a las 09:07 (solo a quien ya pagó el 2) y el correo de "liquidaste tu
   curso". Fechas en `FECHA_PAGO2` / `FECHA_PAGO3`; textos en `correos`. Si Resend falla, la siguiente
   corrida (cada hora, minuto 7) lo reintenta.
 - Los links de los correos son `SITE_URL/?pagar=<id>`: piden a `inscripcion` un link de Clip nuevo para el

@@ -271,20 +271,23 @@ Secretos de la Edge Function `parcialidades`:
 | `PARCIALIDADES_TOKEN` | Texto aleatorio (solo letras y números, 32+ caracteres) |
 | `SITE_URL` | El mismo de `inscripcion` |
 
-Orden de instalación (seguido y sin pausas: entre el paso 2 y el 4 el flujo de pago está a medias):
+Orden de instalación. El sitio va primero: el sitio nuevo funciona con las funciones anteriores (muestra el
+pago completo de siempre), pero el sitio anterior no funciona con las funciones nuevas.
 
-1. Guarda la URL en Vault (SQL Editor):
+1. Genera el token (SQL Editor): `select encode(extensions.gen_random_bytes(24), 'hex');`. Guárdalo como secreto
+   `PARCIALIDADES_TOKEN` de las Edge Functions y en Vault:
    ```sql
    select vault.create_secret(
      'https://<PROJECT-REF>.supabase.co/functions/v1/parcialidades?token=<PARCIALIDADES_TOKEN>',
      'parcialidades_url'
    );
    ```
-2. Ejecuta la migración `20261103120000_pagos_parcialidades.sql`.
-3. Despliega `inscripcion`, `clip-webhook`, `confirmacion-email`, `estudiantes` y `parcialidades` (nueva) con
-   verificación de JWT desactivada, y define los secretos de `parcialidades`.
-4. Publica el sitio.
-5. Actualiza el Apps Script de la Google Sheet con `integrations/google-sheets/Code.gs`, corre `configurar` y
+2. Haz merge de la rama y publica el sitio.
+3. Despliega `parcialidades` (nueva) con verificación de JWT desactivada.
+4. Ejecuta la migración `20261103120000_pagos_parcialidades.sql`.
+5. Enseguida despliega `clip-webhook`, `inscripcion`, `confirmacion-email` y `estudiantes` (JWT desactivado).
+   Entre el paso 4 y este, un pago completado no dispararía el correo de Zoom; son un par de minutos.
+6. Actualiza el Apps Script de la Google Sheet con `integrations/google-sheets/Code.gs`, corre `configurar` y
    publica una versión nueva del deployment existente (agrega Forma de pago, Pagado a la fecha, Saldo y
    Último pago).
 

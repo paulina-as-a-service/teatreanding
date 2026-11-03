@@ -1,9 +1,10 @@
 /**
  * Edge Function: confirmacion-email
  *
- * Sends the "tu lugar está apartado" confirmation email through Resend once a registration is paid.
+ * Sends the confirmation email with the Zoom link through Resend once a registration has access:
+ * full payment, or (installments) the $500 apartado plus pago 2.
  * Called by the database (trigger `inscripciones_confirmacion_email`, via pg_net) with { "id": <uuid> }:
- *   - when pago_estado changes to 'pagado' (Clip webhook or the success page's backup check), or
+ *   - when acceso_zoom changes to true (calculated from the `pagos` table), or
  *   - when someone sets confirmacion_estado = 'reintentar' in the Table Editor (manual resend).
  *
  * Each registration gets one confirmation. Before sending, the function claims the row
@@ -32,6 +33,10 @@ type Fila = {
   nombre: string;
   email: string;
   pago_estado: string;
+  acceso_zoom: boolean;
+  plan_pago: string | null;
+  monto: number | string;
+  monto_pagado: number | string;
   confirmacion_estado: string | null;
   confirmacion_intentos: number;
   confirmacion_actualizado_at: string | null;
@@ -43,7 +48,7 @@ const REPLY_TO_DEFAULT = 'teatranding@gmail.com';
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const RECLAMO_VENCIDO_MS = 10 * 60 * 1000;
 const COLUMNAS =
-  'id,nombre,email,pago_estado,confirmacion_estado,confirmacion_intentos,confirmacion_actualizado_at';
+  'id,nombre,email,pago_estado,acceso_zoom,plan_pago,monto,monto_pagado,confirmacion_estado,confirmacion_intentos,confirmacion_actualizado_at';
 
 /* ------------------------------------------------------------------------------------------
  * PLANTILLA DEL CORREO (texto final, 20 oct 2026)
@@ -67,10 +72,33 @@ const DETALLES: [string, string][] = [
   ['Modalidad', 'Online en vivo vía Zoom'],
 ];
 
-export function cuerpoTexto(nombre: string, zoomUrl: string): string {
+/* Variante para quien paga en parcialidades: este correo sale al confirmarse el pago 2. */
+export const ASUNTO_PARCIAL = 'Teatranding: recibimos tu pago 2, aquí está tu enlace de Zoom';
+const FECHA_PAGO_FINAL = 'lunes 30 de noviembre';
+
+const pesos = (n: number) =>
+  `$${n.toLocaleString('es-MX', { minimumFractionDigits: Number.isInteger(n) ? 0 : 2, maximumFractionDigits: 2 })} MXN`;
+
+/** Opening lines. `saldo` > 0 means installments with the final payment still pending. */
+function apertura(nombre: string, saldo: number): [string, string] {
+  if (saldo > 0) {
+    return [
+      `¡Gracias, ${nombre}! Recibimos tu pago 2.`,
+      `Ya tienes acceso a ${CURSO_NOMBRE}. Tu último pago, de ${pesos(saldo)}, es el ${FECHA_PAGO_FINAL}: ese día te mandamos el enlace a este correo.`,
+    ];
+  }
   return [
     `¡Muchas gracias por tu compra, ${nombre}! Tu pago ha sido recibido con éxito 🎉`,
     `¡Te damos la más cordial bienvenida a ${CURSO_NOMBRE}! Tu lugar ya está completamente asegurado.`,
+  ];
+}
+
+const cierre = (saldo: number) =>
+  saldo > 0 ? '¡Nos vemos en clase!' : '¡Nos vemos el 14 de noviembre para comenzar a crear!';
+
+export function cuerpoTexto(nombre: string, zoomUrl: string, saldo = 0): string {
+  return [
+    ...apertura(nombre, saldo),
     '',
     '📌 Detalles del curso',
     ...DETALLES.map(([k, v]) => `${k}: ${v}`),
@@ -84,7 +112,7 @@ export function cuerpoTexto(nombre: string, zoomUrl: string): string {
     '¿Tienes alguna duda?',
     `Si necesitas ayuda o tienes preguntas antes de comenzar, escríbenos a ${CONTACTO_EMAIL} o por Instagram en @${INSTAGRAM}.`,
     '',
-    '¡Nos vemos el 14 de noviembre para comenzar a crear!',
+    cierre(saldo),
   ].join('\n');
 }
 
@@ -98,8 +126,9 @@ function encabezado(logoUrl: string | null): string {
     </div>`;
 }
 
-export function cuerpoHtml(nombre: string, zoomUrl: string, logoUrl: string | null = null): string {
-  const n = escapar(nombre);
+export function cuerpoHtml(nombre: string, zoomUrl: string, logoUrl: string | null = null, saldo = 0): string {
+  const [l1, l2] = apertura(escapar(nombre), saldo);
+  const negrita = l1.indexOf('!') + 1;
   const z = escapar(zoomUrl);
   const filas = DETALLES.map(
     ([k, v]) =>
@@ -110,8 +139,8 @@ export function cuerpoHtml(nombre: string, zoomUrl: string, logoUrl: string | nu
 <body style="margin:0;padding:24px;background:#f4f2fb;font-family:Arial,Helvetica,sans-serif;color:#1d1a3a;">
   <div style="max-width:560px;margin:0 auto;background:#ffffff;border-radius:12px;padding:32px;line-height:1.55;font-size:15px;">
     ${encabezado(logoUrl)}
-    <p style="margin-top:0;"><strong>¡Muchas gracias por tu compra, ${n}!</strong> Tu pago ha sido recibido con éxito 🎉</p>
-    <p>¡Te damos la más cordial bienvenida a <strong>${CURSO_NOMBRE}</strong>! Tu lugar ya está completamente asegurado.</p>
+    <p style="margin-top:0;"><strong>${l1.slice(0, negrita)}</strong>${l1.slice(negrita)}</p>
+    <p>${l2.replace(CURSO_NOMBRE, `<strong>${CURSO_NOMBRE}</strong>`)}</p>
     <h2 style="font-size:17px;margin:28px 0 8px;">📌 Detalles del curso</h2>
     <table role="presentation" style="border-collapse:collapse;font-size:15px;">${filas}</table>
     <p style="margin-top:24px;">Podrás unirte a todas las sesiones a través del siguiente enlace:</p>
@@ -120,7 +149,7 @@ export function cuerpoHtml(nombre: string, zoomUrl: string, logoUrl: string | nu
     <p style="color:#5b5480;font-size:14px;">(Te sugerimos guardar este enlace en tu calendario y conectarte 5 minutos antes del inicio).</p>
     <h2 style="font-size:17px;margin:28px 0 8px;">¿Tienes alguna duda?</h2>
     <p style="margin-top:0;">Si necesitas ayuda o tienes preguntas antes de comenzar, escríbenos a <a href="mailto:${CONTACTO_EMAIL}" style="color:#3b2fc9;">${CONTACTO_EMAIL}</a> o por Instagram en <a href="https://www.instagram.com/${INSTAGRAM}/" style="color:#3b2fc9;">@${INSTAGRAM}</a>.</p>
-    <p style="margin-top:28px;font-weight:bold;">¡Nos vemos el 14 de noviembre para comenzar a crear!</p>
+    <p style="margin-top:28px;font-weight:bold;">${cierre(saldo)}</p>
   </div>
 </body>
 </html>`;
@@ -146,7 +175,7 @@ export function crearHandler(deps: Deps) {
 
   /** Whether this registration may be (re)sent right now. */
   const puedeEnviar = (f: Fila) => {
-    if (f.pago_estado !== 'pagado') return false;
+    if (!f.acceso_zoom) return false;
     if (f.confirmacion_estado === null || f.confirmacion_estado === 'error' || f.confirmacion_estado === 'reintentar') {
       return true;
     }
@@ -200,7 +229,7 @@ export function crearHandler(deps: Deps) {
         confirmacion_actualizado_at: deps.now().toISOString(),
       })
       .eq('id', id)
-      .eq('pago_estado', 'pagado')
+      .eq('acceso_zoom', true)
       .eq('confirmacion_intentos', fila.confirmacion_intentos);
     reclamo =
       fila.confirmacion_estado === null
@@ -211,6 +240,9 @@ export function crearHandler(deps: Deps) {
     if (!reclamada?.length) return json({ ok: true, omitido: true, motivo: 'en_curso' });
 
     const nombre = (fila.nombre ?? '').trim();
+    // Installments with the final payment pending get the variant that mentions it.
+    const pendiente = Math.round((Number(fila.monto ?? 0) - Number(fila.monto_pagado ?? 0)) * 100) / 100;
+    const saldo = fila.plan_pago === 'parcialidades' && fila.pago_estado !== 'pagado' && pendiente > 0 ? pendiente : 0;
     // Logo served by the site itself (public/img/logo-correo.png). LOGO_URL overrides it.
     const site = (env.get('SITE_URL') ?? '').trim().replace(/\/+$/, '');
     const logoUrl = env.get('LOGO_URL')?.trim() || (site ? `${site}/img/logo-correo.png` : null);
@@ -235,9 +267,9 @@ export function crearHandler(deps: Deps) {
           from: env.get('RESEND_FROM') || FROM_DEFAULT,
           to: [fila.email],
           reply_to: env.get('RESEND_REPLY_TO') || REPLY_TO_DEFAULT,
-          subject: ASUNTO,
-          html: cuerpoHtml(nombre, zoomUrl, logoUrl),
-          text: cuerpoTexto(nombre, zoomUrl),
+          subject: saldo > 0 ? ASUNTO_PARCIAL : ASUNTO,
+          html: cuerpoHtml(nombre, zoomUrl, logoUrl, saldo),
+          text: cuerpoTexto(nombre, zoomUrl, saldo),
           tags: [{ name: 'tipo', value: 'confirmacion_pago' }],
         }),
       });

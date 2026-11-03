@@ -74,7 +74,7 @@ export default function RevisionEstudiante() {
       if (!r.ok) {
         setErrorTexto(
           r.error === 'ya_pagado'
-            ? 'Esta persona ya pagó, así que no hay nada que decidir.'
+            ? 'Esta persona ya hizo un pago, así que no hay nada que decidir.'
             : 'No se pudo guardar la decisión. Intenta de nuevo.'
         );
         setEstado('error');
@@ -132,7 +132,7 @@ export default function RevisionEstudiante() {
                 </p>
                 {resultado.correo_enviado ? (
                   <p className="mt-2 text-text/85">
-                    Le enviamos a {datos?.email} {resultado.estado === 'validado' ? `su link de pago por ${fmt(CURSO.precio.estudiante)}` : `el motivo y el link de pago por ${fmt(CURSO.precio.monto)}`}.
+                    Le enviamos a {datos?.email} {resultado.estado === 'validado' ? `su link de pago (${fmt(CURSO.precio.estudiante)} completo o apartado de ${fmt(CURSO.precio.apartado)})` : `el motivo y el link de pago (${fmt(CURSO.precio.monto)} completo o apartado de ${fmt(CURSO.precio.apartado)})`}.
                     La Google Sheet se actualiza sola.
                   </p>
                 ) : (
@@ -162,7 +162,7 @@ export default function RevisionEstudiante() {
                 {datos.estado === 'validado'
                   ? `Ya aprobaste esta solicitud${datos.decidido_at ? ` el ${fecha(datos.decidido_at)}` : ''}.`
                   : `Ya rechazaste esta solicitud${datos.decidido_at ? ` el ${fecha(datos.decidido_at)}` : ''}${datos.motivo ? ` (${datos.motivo})` : ''}.`}{' '}
-                {datos.pagado ? 'Ya pagó.' : 'Todavía no paga.'}
+                {datos.pagado ? 'Ya hizo al menos un pago.' : 'Todavía no paga.'}
               </div>
             )}
 
@@ -262,8 +262,8 @@ export default function RevisionEstudiante() {
                   {decision && (
                     <p className="mt-5 text-sm text-text/85">
                       {decision === 'aprobar'
-                        ? `Al confirmar, ${datos.email} recibe su link de pago por ${fmt(CURSO.precio.estudiante)}.`
-                        : `Al confirmar, ${datos.email} recibe el motivo y el link de pago por ${fmt(CURSO.precio.monto)}.`}{' '}
+                        ? `Al confirmar, ${datos.email} recibe su link de pago por ${fmt(CURSO.precio.estudiante)} (completo o apartando con ${fmt(CURSO.precio.apartado)}).`
+                        : `Al confirmar, ${datos.email} recibe el motivo y el link de pago por ${fmt(CURSO.precio.monto)} (completo o apartando con ${fmt(CURSO.precio.apartado)}).`}{' '}
                       La decisión no se puede cambiar después.
                     </p>
                   )}

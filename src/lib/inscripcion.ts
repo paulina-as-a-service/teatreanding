@@ -1,4 +1,8 @@
 import { supabase } from './supabase';
+import type { Opciones } from './precios';
+
+export type Plan = 'completo' | 'parcialidades';
+export type Concepto = 'completo' | 'apartado' | 'pago2' | 'pago3';
 
 export type RespuestaInscripcion = {
   ok: boolean;
@@ -9,8 +13,21 @@ export type RespuestaInscripcion = {
   error?: string;
   campos?: string[];
   pagado?: boolean;
-  /** Amount Clip charges for this registration (1499 once a student discount is approved). */
+  /** Amount of the payment this link charges. */
   monto?: number;
+  /** Course price for this registration (1499 once a student discount is approved). */
+  total?: number;
+  /** Amounts of both options (full payment, or $500 + pago 2 + pago 3). */
+  opciones?: Opciones;
+  /** Which payment the link charges. */
+  concepto?: Concepto;
+  /** First payment: the page must ask "pagar completo" or "apartar con $500" before asking for a link. */
+  requiere_plan?: boolean;
+  /** Sign-ups closed (course started) and this registration has no payment yet. */
+  cerrado?: boolean;
+  /** Already paid the $500 apartado: the next links arrive by email. */
+  ya_apartado?: boolean;
+  pago_estado?: string;
   /** Student-discount request: no payment link until Mauricio approves it. */
   estudiante?: boolean;
   en_revision?: boolean;
@@ -47,11 +64,18 @@ async function invocar(body: Record<string, unknown>): Promise<RespuestaInscripc
 /** Saves the registration and returns its personal Clip payment link. */
 export const registrarInscripcion = (d: DatosInscripcion) => invocar({ accion: 'registrar', ...d });
 
-/** Returns a valid payment link for an existing registration (renews it if expired). */
-export const obtenerLinkPago = (id: string) => invocar({ accion: 'link', id });
+/**
+ * Returns a valid link for the next payment of a registration (renews it if expired).
+ * First payment: pass the plan; without it the answer is `requiere_plan`.
+ */
+export const obtenerLinkPago = (id: string, plan?: Plan) => invocar({ accion: 'link', id, plan });
 
-/** Whether a registration is already marked as paid. */
-export const consultarPago = (id: string) => invocar({ accion: 'estado', id });
+/** Whether a payment (or, without `concepto`, the whole course) is recorded. */
+export const consultarPago = (id: string, concepto?: Concepto | null) =>
+  invocar({ accion: 'estado', id, concepto: concepto ?? undefined });
+
+export const planDeConcepto = (c: Concepto | null): Plan | undefined =>
+  c === 'completo' ? 'completo' : c === 'apartado' ? 'parcialidades' : undefined;
 
 /** Marks a student-discount request as ready, after the optional upload. Triggers the emails. */
 export const marcarEstudianteListo = (id: string) => invocar({ accion: 'estudiante_listo', id });

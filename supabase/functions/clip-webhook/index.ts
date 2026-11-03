@@ -8,8 +8,11 @@
  *   1. checks the secret ?token= in the URL,
  *   2. logs the raw notification in `clip_eventos`,
  *   3. asks Clip's API for the link's real status (GET /v2/checkout/{id}),
- *   4. marks the registration as paid only if Clip itself reports it completed.
- * Marking it paid updates the Google Sheet automatically (database trigger).
+ *   4. records the payment only if Clip itself reports it completed: one row in `pagos` per link
+ *      (database function registrar_pago_clip, idempotent per link). The concept and amount come from
+ *      `clip_links` (completo, apartado, pago2 or pago3).
+ * The database then recalculates pago_estado / monto_pagado, updates the Google Sheet and sends the
+ * matching email (triggers on `pagos` and `inscripciones`).
  *
  * Secrets: CLIP_API_KEY, CLIP_SECRET_KEY, CLIP_WEBHOOK_TOKEN.
  * Provided automatically: SUPABASE_URL and the service key (legacy or new format).
@@ -22,6 +25,17 @@ type Env = { get(key: string): string | undefined };
 export type Deps = { db: SupabaseClient; env: Env; fetch: typeof fetch; now: () => Date };
 
 const CLIP_API = 'https://api.payclip.com/v2/checkout';
+const APARTADO = 500;
+const CONCEPTOS = new Set<string>(['completo', 'apartado', 'pago2', 'pago3']);
+const redondear = (n: number) => Math.round(n * 100) / 100;
+/** Same split as `inscripcion` (used only for links created before clip_links stored the amount). */
+function montoDe(total: number, concepto: string): number {
+  const cuota = redondear((total - APARTADO) / 2);
+  if (concepto === 'apartado') return APARTADO;
+  if (concepto === 'pago2') return cuota;
+  if (concepto === 'pago3') return redondear(total - APARTADO - cuota);
+  return total;
+}
 const COMPLETADO = new Set(['CHECKOUT_COMPLETED', 'COMPLETED']);
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -103,22 +117,20 @@ export function crearHandler(deps: Deps) {
     // Find the registration: by any link ever created for it, then by our own reference.
     const { data: link } = await db
       .from('clip_links')
-      .select('inscripcion_id')
+      .select('inscripcion_id,concepto,monto')
       .eq('payment_request_id', prid)
       .maybeSingle();
     const ref =
       link?.inscripcion_id ??
       (typeof n.me_reference_id === 'string' && UUID_RE.test(n.me_reference_id) ? n.me_reference_id : null);
-    let fila: { id: string; pago_estado: string; pagado_at: string | null } | null = null;
+    type Fila = { id: string; pago_estado: string; monto: number | string; clip_link_concepto: string | null };
+    const COLS = 'id,pago_estado,monto,clip_link_concepto';
+    let fila: Fila | null = null;
     if (ref) {
-      ({ data: fila } = await db.from('inscripciones').select('id,pago_estado,pagado_at').eq('id', ref).maybeSingle());
+      ({ data: fila } = await db.from('inscripciones').select(COLS).eq('id', ref).maybeSingle());
     }
     if (!fila) {
-      ({ data: fila } = await db
-        .from('inscripciones')
-        .select('id,pago_estado,pagado_at')
-        .eq('clip_payment_request_id', prid)
-        .maybeSingle());
+      ({ data: fila } = await db.from('inscripciones').select(COLS).eq('clip_payment_request_id', prid).maybeSingle());
     }
 
     if (evento?.id) {
@@ -132,17 +144,39 @@ export function crearHandler(deps: Deps) {
       return json({ ok: true, sin_inscripcion: true });
     }
 
+    const completado = COMPLETADO.has(estado);
+    let nuevo = false;
+    if (completado) {
+      // A link in clip_links says what it charged (older links have no concept: they were full payments).
+      // A link missing from clip_links can only be the registration's current one.
+      const conceptoLink = link ? (link.concepto ?? 'completo') : (fila.clip_link_concepto ?? 'completo');
+      const concepto = CONCEPTOS.has(conceptoLink) ? conceptoLink : 'completo';
+      const monto = link?.monto != null ? Number(link.monto) : montoDe(Number(fila.monto ?? 1999), concepto);
+      const { data: registrado, error: errPago } = await db.rpc('registrar_pago_clip', {
+        p_inscripcion: fila.id,
+        p_concepto: concepto,
+        p_monto: monto,
+        p_payment_request_id: prid,
+        p_pagado_at:
+          fechaValida(n.payment_date, n.completed_at, clip.payment_date, clip.completed_at, clip.modified_at) ??
+          deps.now().toISOString(),
+        p_transaction_id: texto(n.transaction_id) ?? texto(clip.transaction_id),
+        p_receipt_no: texto(n.receipt_no) ?? texto(clip.receipt_no),
+        p_payment_type: texto(n.payment_type) ?? texto(clip.payment_type),
+      });
+      if (errPago) {
+        console.error('Payment insert failed', fila.id, prid, errPago.message);
+        return json({ ok: false, error: 'db' }, 500); // non-2xx so Clip retries
+      }
+      nuevo = registrado === true;
+    }
+
     const cambios: Record<string, unknown> = {
       clip_ultimo_estado: estado || null,
       clip_actualizado_at: deps.now().toISOString(),
     };
-    if (COMPLETADO.has(estado) && fila.pago_estado !== 'pagado') {
+    if (completado) {
       Object.assign(cambios, {
-        pago_estado: 'pagado',
-        pagado_at:
-          fila.pagado_at ??
-          fechaValida(n.payment_date, n.completed_at, clip.payment_date, clip.completed_at, clip.modified_at) ??
-          deps.now().toISOString(),
         clip_payment_request_id: prid,
         clip_transaction_id: texto(n.transaction_id) ?? texto(clip.transaction_id),
         clip_receipt_no: texto(n.receipt_no) ?? texto(clip.receipt_no),
@@ -154,7 +188,7 @@ export function crearHandler(deps: Deps) {
       console.error('Update failed', fila.id, error.message);
       return json({ ok: false, error: 'db' }, 500);
     }
-    return json({ ok: true, estado, pagado: cambios.pago_estado === 'pagado' || fila.pago_estado === 'pagado' });
+    return json({ ok: true, estado, pagado: completado, nuevo });
   };
 }
 

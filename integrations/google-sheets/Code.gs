@@ -23,8 +23,10 @@ const ZONA = 'America/Mexico_City';
 const ENCABEZADOS = [
   'ID', 'Fecha de registro', 'Nombre', 'Apellidos', 'Correo', 'Estado de pago', 'Fecha de pago',
   'Estudiante', 'Descuento estudiante', 'Monto',
+  'Forma de pago', 'Pagado a la fecha', 'Saldo', 'Último pago',
 ];
-const ESTADOS = { pendiente: 'Pendiente', pagado: 'Pagado', cancelado: 'Cancelado' };
+const ESTADOS = { pendiente: 'Pendiente', parcial: 'Pago parcial', pagado: 'Pagado', cancelado: 'Cancelado' };
+const PLANES = { completo: 'Un solo pago', parcialidades: 'Apartado + 2 pagos' };
 const ESTADOS_ESTUDIANTE = {
   pendiente_documento: 'Esperando credencial',
   en_revision: 'En revisión',
@@ -76,6 +78,10 @@ function doPost(e) {
       r.es_estudiante ? 'Sí' : 'No',
       ESTADOS_ESTUDIANTE[r.estudiante_estado] || texto_(r.estudiante_estado),
       r.monto == null ? '' : Number(r.monto),
+      PLANES[r.plan_pago] || texto_(r.plan_pago),
+      r.monto_pagado == null ? '' : Number(r.monto_pagado),
+      r.monto == null ? '' : Math.round((Number(r.monto) - Number(r.monto_pagado || 0)) * 100) / 100,
+      fecha_(r.ultimo_pago_at),
     ];
     const ultima = hoja.getLastRow();
     let indice = -1;

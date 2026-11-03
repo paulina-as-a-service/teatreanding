@@ -2,20 +2,36 @@ import { useEffect, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { AlertCircle, Check, Loader2, Mail, RefreshCw, X } from 'lucide-react';
 import { CURSO } from '../content/curso';
-import { consultarPago, obtenerLinkPago } from '../lib/inscripcion';
+import { consultarPago, obtenerLinkPago, planDeConcepto, type Concepto } from '../lib/inscripcion';
 
 type Vista = 'confirmando' | 'confirmado' | 'en-proceso' | 'error' | null;
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-/** Reads Clip's redirect (?pago=exito|error&ref=<id>) and shows the outcome. */
+const CONCEPTOS = ['completo', 'apartado', 'pago2', 'pago3'] as const;
+
+/** Reads Clip's redirect (?pago=exito|error&ref=<id>&c=<concepto>) and shows the outcome. */
 function leerRetorno() {
   const p = new URLSearchParams(window.location.search);
   const pago = p.get('pago');
   const ref = p.get('ref') ?? '';
   if ((pago !== 'exito' && pago !== 'error') || !UUID_RE.test(ref)) return null;
-  return { pago, ref } as const;
+  const c = p.get('c');
+  // Links created before installments have no `c`: they were full payments.
+  const concepto: Concepto | null = (CONCEPTOS as readonly string[]).includes(c ?? '') ? (c as Concepto) : null;
+  return { pago, ref, concepto } as const;
 }
+
+/** Title and text once the payment is confirmed, per payment. */
+const CONFIRMADO: Record<Concepto, [string, string]> = {
+  completo: ['¡Tu lugar está apartado!', 'Tu pago quedó registrado. Nos vemos el sábado 14 de noviembre en el curso.'],
+  apartado: [
+    '¡Tu lugar está apartado!',
+    'Recibimos tus $500. Te mandamos a tu correo los enlaces de tus pagos del 14 y del 30 de noviembre. El enlace de Zoom llega con tu pago 2.',
+  ],
+  pago2: ['Recibimos tu pago 2', 'En unos minutos te llega el correo con el enlace de Zoom. Tu pago final es el 30 de noviembre.'],
+  pago3: ['Liquidaste tu curso', 'Recibimos tu pago final. Ya no tienes pagos pendientes.'],
+};
 
 export default function PagoRetorno() {
   const [retorno] = useState(leerRetorno);
@@ -37,7 +53,7 @@ export default function PagoRetorno() {
     const revisar = async () => {
       intentos += 1;
       try {
-        const r = await consultarPago(retorno.ref);
+        const r = await consultarPago(retorno.ref, retorno.concepto);
         if (!activo) return;
         if (r.pagado) return setVista('confirmado');
       } catch {
@@ -57,9 +73,10 @@ export default function PagoRetorno() {
     if (!retorno) return;
     setCargando(true);
     try {
-      const r = await obtenerLinkPago(retorno.ref);
+      const r = await obtenerLinkPago(retorno.ref, planDeConcepto(retorno.concepto));
       if (r.ya_pagado) setVista('confirmado');
       else if (r.payment_url) window.location.href = r.payment_url;
+      else if (r.requiere_plan) window.location.href = `${window.location.pathname}?pagar=${retorno.ref}`;
     } catch {
       /* stays on the error view */
     } finally {
@@ -113,15 +130,14 @@ export default function PagoRetorno() {
 
             <h2 id="pago-titulo" className="mt-6 text-2xl font-bold text-ink">
               {vista === 'confirmando' && 'Confirmando tu pago…'}
-              {vista === 'confirmado' && '¡Tu lugar está apartado!'}
+              {vista === 'confirmado' && CONFIRMADO[retorno?.concepto ?? 'completo'][0]}
               {vista === 'en-proceso' && 'Gracias, recibimos tu pago'}
               {vista === 'error' && 'El pago no se completó'}
             </h2>
 
             <p className="mt-3 text-text/85" aria-live="polite">
               {vista === 'confirmando' && 'Estamos verificando la operación con Clip. Esto toma unos segundos.'}
-              {vista === 'confirmado' &&
-                'Tu pago quedó registrado. Nos vemos el sábado 14 de noviembre en el curso.'}
+              {vista === 'confirmado' && CONFIRMADO[retorno?.concepto ?? 'completo'][1]}
               {vista === 'en-proceso' &&
                 'Clip aún está confirmando la operación. No necesitas pagar de nuevo; si en unas horas no recibes noticias nuestras, escríbenos.'}
               {vista === 'error' &&

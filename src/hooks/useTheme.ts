@@ -4,6 +4,7 @@ export type Theme = 'light' | 'dark';
 export const THEME_KEY = 'teatranding-theme';
 
 const readTheme = (): Theme =>
+  typeof document !== 'undefined' &&
   document.documentElement.classList.contains('dark') ? 'dark' : 'light';
 
 /** Applies the theme to <html> synchronously. The pre-render script in index.html uses the same mechanism. */

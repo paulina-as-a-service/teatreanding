@@ -4,6 +4,8 @@ const fmt = (opts: Intl.DateTimeFormatOptions, timeZone: string) =>
   new Intl.DateTimeFormat('es-MX', { ...opts, timeZone });
 
 export const userTimeZone = (): string => {
+  // Build-time prerender: show course times in CDMX, not the build machine's zone.
+  if (typeof window === 'undefined') return ZONA_CURSO;
   try {
     return Intl.DateTimeFormat().resolvedOptions().timeZone || ZONA_CURSO;
   } catch {

@@ -10,6 +10,7 @@ import '@fontsource/saira-condensed/700.css';
 import App from './App.tsx';
 import './index.css';
 
+// #root arrives prerendered (scripts/prerender.mjs) so crawlers can read the page; React replaces it on mount.
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <App />

@@ -15,7 +15,8 @@ import PagarDirecto from './components/PagarDirecto';
 import RevisionEstudiante from './components/RevisionEstudiante';
 
 /** Student-discount review page for Mauricio (link from his notification email). */
-const esRevision = () => new URLSearchParams(window.location.search).has('revision');
+const esRevision = () =>
+  typeof window !== 'undefined' && new URLSearchParams(window.location.search).has('revision');
 
 export default function App() {
   const { theme, setTheme } = useTheme();

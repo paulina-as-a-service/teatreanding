@@ -1,0 +1,27 @@
+# Teatranding! · https://teatranding.com
+# Todo el sitio es público. Las URLs con parámetros son enlaces personales de pago y revisión.
+
+User-agent: *
+Allow: /
+Disallow: /*?pagar=
+Disallow: /*?pago=
+Disallow: /*?revision
+
+# Buscadores con IA: acceso explícito para que puedan leer y citar el sitio.
+User-agent: GPTBot
+User-agent: OAI-SearchBot
+User-agent: ChatGPT-User
+User-agent: ClaudeBot
+User-agent: Claude-SearchBot
+User-agent: Claude-User
+User-agent: PerplexityBot
+User-agent: Perplexity-User
+User-agent: Google-Extended
+User-agent: Applebot-Extended
+User-agent: Bingbot
+Allow: /
+Disallow: /*?pagar=
+Disallow: /*?pago=
+Disallow: /*?revision
+
+Sitemap: https://teatranding.com/sitemap.xml

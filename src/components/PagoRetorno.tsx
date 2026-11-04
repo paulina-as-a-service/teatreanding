@@ -12,6 +12,7 @@ const CONCEPTOS = ['completo', 'apartado', 'pago2', 'pago3'] as const;
 
 /** Reads Clip's redirect (?pago=exito|error&ref=<id>&c=<concepto>) and shows the outcome. */
 function leerRetorno() {
+  if (typeof window === 'undefined') return null; // build-time prerender
   const p = new URLSearchParams(window.location.search);
   const pago = p.get('pago');
   const ref = p.get('ref') ?? '';

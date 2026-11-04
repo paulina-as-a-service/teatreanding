@@ -16,6 +16,7 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
  * email never expires. Before the first payment, it shows the choice "apartar con $500" / "pagar completo".
  */
 function leerId() {
+  if (typeof window === 'undefined') return null; // build-time prerender
   const id = new URLSearchParams(window.location.search).get('pagar') ?? '';
   return UUID_RE.test(id) ? id : null;
 }
